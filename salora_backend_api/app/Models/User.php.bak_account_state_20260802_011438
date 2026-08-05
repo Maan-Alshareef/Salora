@@ -1,0 +1,22 @@
+<?php
+namespace App\Models;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Str;
+use Laravel\Sanctum\HasApiTokens;
+class User extends Authenticatable
+{
+    use HasApiTokens,HasFactory,Notifiable,SoftDeletes;
+    protected $fillable=['name','email','pending_email','pending_email_requested_at','phone','password','role','avatar','status','business_status','business_rejection_reason','must_change_password','email_verified_at','last_login_at','failed_login_attempts','locked_until','suspended_until','suspension_reason','suspended_by'];
+    protected $hidden=['password','remember_token'];
+    protected $appends=['avatar_url','account_state'];
+    protected $casts=['email_verified_at'=>'datetime','pending_email_requested_at'=>'datetime','last_login_at'=>'datetime','locked_until'=>'datetime','suspended_until'=>'datetime','deleted_at'=>'datetime','failed_login_attempts'=>'integer','must_change_password'=>'boolean','password'=>'hashed'];
+    public function getAvatarUrlAttribute():?string{$avatar=trim((string)$this->avatar);if($avatar==='')return null;if(Str::startsWith($avatar,['http://','https://','data:']))return $avatar;return '/storage/'.ltrim($avatar,'/');}
+    public function getAccountStateAttribute(): ?string{if($this->trashed())return 'deleted';if($this->locked_until?->isFuture())return 'locked';return $this->status;}
+    public function reactivateIfSuspensionExpired():bool{if($this->status!=='suspended'||!$this->suspended_until?->isPast())return false;$this->forceFill(['status'=>'active','suspended_until'=>null,'suspension_reason'=>null,'suspended_by'=>null])->save();return true;}
+    public function isAvailableForNewBusiness():bool{if($this->trashed())return false;$this->reactivateIfSuspensionExpired();$this->refresh();return $this->status==='active'&&($this->role==='customer'||$this->business_status==='approved');}
+    public function ownedVenues(){return $this->hasMany(Venue::class,'owner_id');} public function bookings(){return $this->hasMany(Booking::class,'customer_id');} public function ownedBookings(){return $this->hasMany(Booking::class,'owner_id');} public function services(){return $this->hasMany(Service::class,'provider_id');} public function providerProfile(){return $this->hasOne(ProviderProfile::class);} public function providerServiceRequests(){return $this->hasMany(ProviderServiceRequest::class,'provider_id');} public function reviews(){return $this->hasMany(Review::class,'customer_id');} public function events(){return $this->hasMany(Event::class,'customer_id');} public function notifications(){return $this->hasMany(Notification::class);} public function complaints(){return $this->hasMany(Complaint::class,'customer_id');} public function emailOtps(){return $this->hasMany(EmailOtp::class);} public function joinRequests(){return $this->hasMany(OwnerRequest::class,'applicant_user_id');} public function payoutAccounts(){return $this->hasMany(PayoutAccount::class);} public function payableInvoices(){return $this->hasMany(Invoice::class,'payee_id');}
+}
+

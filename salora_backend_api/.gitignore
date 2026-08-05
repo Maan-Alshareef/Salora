@@ -1,0 +1,14 @@
+/.phpunit.cache
+/.env
+/vendor/
+/storage/*.key
+/storage/logs/*.log
+/storage/framework/cache/data/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/storage/app/private/payment-proofs/*
+/storage/app/public/payment-proofs/*
+/public/storage
+.phpunit.result.cache
+# Firebase service-account private keys
+/storage/app/firebase/*.json

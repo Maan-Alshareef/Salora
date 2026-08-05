@@ -1,0 +1,169 @@
+# =========================================================
+# Salora monorepo - generated/local/heavy/sensitive files
+# =========================================================
+
+# Secrets and local environment
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.testing.example
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*.jks
+**/*.keystore
+**/key.properties
+**/local.properties
+**/secrets.properties
+**/credentials.json
+**/service-account*.json
+
+# Operating system and editors
+.DS_Store
+Thumbs.db
+Desktop.ini
+**/.idea/
+**/.vscode/
+**/*.iml
+**/*.swp
+**/*.swo
+**/*~
+**/.history/
+
+# Logs, temporary files, reports and backups
+**/*.log
+**/*.tmp
+**/*.temp
+**/*.bak
+**/*.backup
+**/*.old
+**/*.orig
+**/*.cache
+**/*.pid
+**/*.stackdump
+_salora_backups/
+_salora_reports/
+**/.git.salora_nested_backup_*/
+
+# Archives and generated installation packages
+**/*.zip
+**/*.rar
+**/*.7z
+**/*.tar
+**/*.tar.gz
+**/*.apk
+**/*.aab
+**/*.ipa
+**/*.msix
+**/*.appx
+
+# Databases and local dumps
+**/*.sqlite
+**/*.sqlite3
+**/*.sqlite-shm
+**/*.sqlite-wal
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.sql
+**/*.dump
+
+# =========================================================
+# Laravel backend
+# =========================================================
+salora_backend_api/vendor/
+salora_backend_api/node_modules/
+salora_backend_api/public/build/
+salora_backend_api/public/hot
+salora_backend_api/public/storage
+salora_backend_api/public/uploads/
+salora_backend_api/bootstrap/cache/*.php
+!salora_backend_api/bootstrap/cache/.gitignore
+salora_backend_api/storage/app/*
+!salora_backend_api/storage/app/.gitignore
+salora_backend_api/storage/framework/cache/*
+!salora_backend_api/storage/framework/cache/.gitignore
+salora_backend_api/storage/framework/sessions/*
+!salora_backend_api/storage/framework/sessions/.gitignore
+salora_backend_api/storage/framework/testing/*
+!salora_backend_api/storage/framework/testing/.gitignore
+salora_backend_api/storage/framework/views/*
+!salora_backend_api/storage/framework/views/.gitignore
+salora_backend_api/storage/logs/*
+!salora_backend_api/storage/logs/.gitignore
+salora_backend_api/.phpunit.result.cache
+salora_backend_api/.phpunit.cache/
+salora_backend_api/.php-cs-fixer.cache
+salora_backend_api/.phpactor.json
+salora_backend_api/auth.json
+
+# Keep dependency lock files
+!salora_backend_api/composer.lock
+!salora_backend_api/package-lock.json
+
+# =========================================================
+# Flutter app
+# =========================================================
+salora_app/.dart_tool/
+salora_app/.packages
+salora_app/.pub-cache/
+salora_app/.flutter-plugins
+salora_app/.flutter-plugins-dependencies
+salora_app/build/
+salora_app/coverage/
+salora_app/doc/api/
+salora_app/android/.gradle/
+salora_app/android/captures/
+salora_app/android/app/debug/
+salora_app/android/app/profile/
+salora_app/android/app/release/
+salora_app/android/app/.cxx/
+salora_app/ios/Pods/
+salora_app/ios/.symlinks/
+salora_app/ios/Flutter/ephemeral/
+salora_app/ios/Flutter/Generated.xcconfig
+salora_app/ios/Flutter/flutter_export_environment.sh
+salora_app/macos/Pods/
+salora_app/macos/Flutter/ephemeral/
+salora_app/linux/flutter/ephemeral/
+salora_app/windows/flutter/ephemeral/
+salora_app/web/.dart_tool/
+
+# Keep Flutter lock file because this is an application
+!salora_app/pubspec.lock
+
+# =========================================================
+# React / Vite dashboard
+# =========================================================
+salora_dashboard/node_modules/
+salora_dashboard/dist/
+salora_dashboard/build/
+salora_dashboard/.vite/
+salora_dashboard/.cache/
+salora_dashboard/coverage/
+salora_dashboard/npm-debug.log*
+salora_dashboard/yarn-debug.log*
+salora_dashboard/yarn-error.log*
+salora_dashboard/pnpm-debug.log*
+salora_dashboard/.eslintcache
+
+# Keep dependency lock files
+!salora_dashboard/package-lock.json
+!salora_dashboard/yarn.lock
+!salora_dashboard/pnpm-lock.yaml
+
+# =========================================================
+# Generic generated folders
+# =========================================================
+**/node_modules/
+**/vendor/
+**/dist/
+**/build/
+**/coverage/
+**/.gradle/
+**/.dart_tool/
+**/.cache/
+**/.temp/
+**/tmp/
+**/temp/

@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Local HTTP is enabled only for debug builds so a physical device can
+         reach the Laravel development server over the LAN. -->
+    <application android:usesCleartextTraffic="true" />
+</manifest>

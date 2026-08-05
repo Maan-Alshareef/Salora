@@ -1,0 +1,54 @@
+digraph SaloraERD {
+  graph [rankdir=LR, bgcolor="white", pad="0.3", nodesep="0.45", ranksep="0.8"];
+  node [shape=record, style="rounded,filled", fillcolor="#f8fbff", color="#2563eb", fontname="Arial", fontsize=10];
+  edge [color="#334155", arrowsize=0.7, fontname="Arial", fontsize=9];
+
+  users [label="{users|id PK\lname\lemail\lrole\lstatus\l}"];
+  venues [label="{venues|id PK\lowner_id FK\lname_en/name_ar\lcity/address\lcapacity\lprice_usd/price_syp\lstatus\l}"];
+  venue_images [label="{venue_images|id PK\lvenue_id FK\limage_url\lis_main\l}"];
+  event_types [label="{event_types|id PK\lname_en/name_ar\lemoji\lis_active\l}"];
+  venue_event_types [label="{venue_event_types|venue_id FK\levent_type_id FK\l}"];
+  services [label="{services|id PK\lname_en/name_ar\ltype\lprice_usd/price_syp\lprovider_id FK\l}"];
+  venue_services [label="{venue_services|venue_id FK\lservice_id FK\lcustom_price\lis_available\l}"];
+  bookings [label="{bookings|id PK\lbooking_number\lcustomer_id FK\lvenue_id FK\lowner_id FK\levent_type_id FK\ltotal_usd/total_syp\lbooking_status\lpayment_status\l}"];
+  booking_services [label="{booking_services|id PK\lbooking_id FK\lservice_id FK\lservice_name\lservice_type\ltotal_usd/total_syp\l}"];
+  payment_proofs [label="{payment_proofs|id PK\lbooking_id FK\lcustomer_id FK\limage_url\lstatus\ladmin_id FK\l}"];
+  offers [label="{offers|id PK\lcreated_by FK\lscope\lvenue_id FK\lowner_id FK\ldiscount\lstatus\l}"];
+  reviews [label="{reviews|id PK\lcustomer_id FK\lvenue_id FK\lservice_id FK\lbooking_id FK\lrating\lstatus\l}"];
+  complaints [label="{complaints|id PK\lcustomer_id FK\lbooking_id FK\lvenue_id FK\lowner_id FK\lstatus\l}"];
+  todo_templates [label="{todo_templates|id PK\levent_type_id FK\ltask\lis_active\l}"];
+  invitation_templates [label="{invitation_templates|id PK\levent_type_id FK\ltitle/body\ltheme\l}"];
+  notifications [label="{notifications|id PK\luser_id FK\ltitle\lis_read\l}"];
+  settings [label="{settings|id PK\lkey\lvalue\l}"];
+  activity_logs [label="{activity_logs|id PK\luser_id FK\laction\ltarget\l}"];
+
+  users -> venues [label="owner"];
+  venues -> venue_images;
+  venues -> venue_event_types;
+  event_types -> venue_event_types;
+  users -> services [label="provider"];
+  venues -> venue_services;
+  services -> venue_services;
+  users -> bookings [label="customer"];
+  users -> bookings [label="owner"];
+  venues -> bookings;
+  event_types -> bookings;
+  bookings -> booking_services;
+  services -> booking_services;
+  bookings -> payment_proofs;
+  users -> payment_proofs [label="customer/admin"];
+  users -> offers [label="creator"];
+  venues -> offers;
+  users -> offers [label="owner"];
+  users -> reviews [label="customer"];
+  venues -> reviews;
+  services -> reviews;
+  bookings -> reviews;
+  users -> complaints [label="customer/owner"];
+  venues -> complaints;
+  bookings -> complaints;
+  event_types -> todo_templates;
+  event_types -> invitation_templates;
+  users -> notifications;
+  users -> activity_logs;
+}

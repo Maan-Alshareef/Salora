@@ -1,0 +1,30 @@
+SALORA BOOKING + PUSH FINAL PATCH V4
+=================================
+
+Applied rules:
+- One venue equals one reservable hall.
+- Every active booking blocks the same venue.
+- 30 minutes preparation time is required between bookings.
+- Temporary checkout/payment holds expire after 15 minutes.
+- Pending/submitted/approved/confirmed bookings keep blocking until a decision.
+- Cancelled/rejected/expired bookings do not block.
+- All Eloquent Notification records are pushed through Firebase.
+- Newly approved offers notify active customers with venue, location, discount, start and end dates.
+- Existing approved offers are primed during installation and are not broadcast retroactively.
+- Dashboard admin/owner profile supports deleting the current avatar.
+
+Useful commands:
+php artisan salora:booking-conflicts
+php artisan salora:booking-conflicts --json
+php artisan salora:expire-booking-holds
+php artisan salora:push-pending-notifications
+php artisan salora:announce-offers
+
+Admin API:
+GET /api/admin/booking-conflicts
+
+Important:
+The scheduler commands run when Laravel scheduler is running:
+php artisan schedule:work
+
+No Flutter or Dashboard build is performed by this patch script.

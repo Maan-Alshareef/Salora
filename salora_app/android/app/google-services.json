@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "246699174236",
+    "project_id": "salora-36ebf",
+    "storage_bucket": "salora-36ebf.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:246699174236:android:d98d3dea17c76a3a6e3999",
+        "android_client_info": {
+          "package_name": "com.salora.university"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCOGa3eWvcw5bSrCkoYKRtmcqXhcx62DeU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

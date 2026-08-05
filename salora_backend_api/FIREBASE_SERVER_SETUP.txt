@@ -1,0 +1,22 @@
+SALORA FIREBASE SERVER SETUP
+============================
+
+1. افتح Firebase Console.
+2. افتح Project settings ثم Service accounts.
+3. اضغط Generate new private key.
+4. لا ترسل ملف المفتاح ولا ترفعه إلى Git.
+5. احفظ الملف محلياً بهذا الاسم والمسار:
+   storage/app/firebase/salora-service-account.json
+6. افتح ملف .env وأضف:
+   FIREBASE_CREDENTIALS=storage/app/firebase/salora-service-account.json
+   FIREBASE_PROJECT_ID=ضع_قيمة_project_id_من_ملف_JSON
+   FIREBASE_ANDROID_CHANNEL_ID=salora_high_importance
+7. نفذ:
+   php artisan optimize:clear
+
+بعد الإعداد، NotificationService يحفظ الإشعار داخل قاعدة البيانات
+ويرسله أيضاً إلى أجهزة المستخدم عبر Firebase HTTP v1.
+
+ملاحظة:
+وجود google-services.json داخل Flutter لا يكفي لإرسال الإشعارات من Laravel.
+ملف service-account مطلوب على الخادم، ويجب أن يبقى سرياً.

@@ -1,0 +1,58 @@
+{
+  "info": {
+    "name": "Salora University Edition - Smoke Tests",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {"key": "baseUrl", "value": "http://127.0.0.1:8000/api"},
+    {"key": "token", "value": ""}
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {"method": "GET", "url": "{{baseUrl}}/health"}
+    },
+    {
+      "name": "Login Admin",
+      "event": [{
+        "listen": "test",
+        "script": {"exec": [
+          "const json = pm.response.json();",
+          "if (json.data && json.data.token) pm.collectionVariables.set('token', json.data.token);"
+        ]}
+      }],
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {"mode": "raw", "raw": "{\n  \"email\": \"admin@salora.test\",\n  \"password\": \"Salora@2026\"\n}"},
+        "url": "{{baseUrl}}/auth/login"
+      }
+    },
+    {
+      "name": "Current User",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key": "Accept", "value": "application/json"},
+          {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+        ],
+        "url": "{{baseUrl}}/auth/me"
+      }
+    },
+    {
+      "name": "Public Venues",
+      "request": {"method": "GET", "url": "{{baseUrl}}/venues"}
+    },
+    {
+      "name": "Admin Summary",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key": "Accept", "value": "application/json"},
+          {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+        ],
+        "url": "{{baseUrl}}/admin/reports/summary"
+      }
+    }
+  ]
+}
