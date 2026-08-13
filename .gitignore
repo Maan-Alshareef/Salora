@@ -167,3 +167,8 @@ salora_dashboard/.eslintcache
 **/.temp/
 **/tmp/
 **/temp/
+
+# Local backup and diagnostic files
+*.bak_*
+salora_app/salora_flutter_diagnostics.txt
+salora_app/salora_flutter_run_log.txt
