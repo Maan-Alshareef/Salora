@@ -11,5 +11,5 @@ return [
     'venue_tables' => ['venues', 'halls', 'salons'],
     'booking_tables' => ['bookings', 'venue_bookings', 'hall_bookings'],
     'legacy_commission_tables' => ['admin_commissions', 'commissions', 'booking_commissions'],
-    'inactive_booking_statuses' => ['cancelled', 'canceled', 'rejected', 'declined', 'completed'],
+    'inactive_booking_statuses' => ['cancelled', 'canceled', 'cancellation_pending_refund', 'rejected', 'owner_rejected', 'declined', 'completed', 'expired', 'refunded', 'deleted'],
 ];

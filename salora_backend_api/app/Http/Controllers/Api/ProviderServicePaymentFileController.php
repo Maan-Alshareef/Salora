@@ -17,7 +17,7 @@ class ProviderServicePaymentFileController extends BaseApiController
         abort_unless($allowed, 403);
 
         $path = trim((string) $providerRequest->payment_proof_path);
-        if ($path === '' || str_contains($path, '..') || !str_starts_with($path, 'service-payment-proofs/')) abort(404);
+        if ($path === '' || str_contains($path, '..') || (!str_starts_with($path, 'service-payment-proofs/') && !str_starts_with($path, 'payment-proofs/'))) abort(404);
         if (!Storage::disk('local')->exists($path)) abort(404);
 
         return Storage::disk('local')->response($path, basename($path), [

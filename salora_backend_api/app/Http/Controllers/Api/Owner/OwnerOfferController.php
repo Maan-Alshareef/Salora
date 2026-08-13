@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Owner;
 use App\Http\Controllers\Api\BaseApiController;
 use App\Models\Venue;
 use App\Models\VenueOffer;
+use App\Services\VenueOfferAnnouncementService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
@@ -22,7 +23,7 @@ class OwnerOfferController extends BaseApiController
         return $this->ok($offers);
     }
 
-    public function store(Request $request)
+    public function store(Request $request, VenueOfferAnnouncementService $announcements)
     {
         $data = $this->validated($request);
         $venue = $this->ownedVenue($request, (int) $data['venue_id']);
@@ -38,10 +39,13 @@ class OwnerOfferController extends BaseApiController
             'published_at' => now(),
         ]);
 
-        return $this->ok($this->present($offer->load('venue')), 'تم نشر العرض مباشرة في التطبيق.', 201);
+        $offer->load('venue');
+        $announcements->announce($offer);
+
+        return $this->ok($this->present($offer), 'تم نشر العرض مباشرة في التطبيق وإرسال إشعار للعملاء.', 201);
     }
 
-    public function update(Request $request, int $offer)
+    public function update(Request $request, int $offer, VenueOfferAnnouncementService $announcements)
     {
         $row = VenueOffer::findOrFail($offer);
         $this->ownedVenue($request, (int) $row->venue_id);
@@ -64,7 +68,13 @@ class OwnerOfferController extends BaseApiController
             'published_at' => now(),
         ]);
 
-        return $this->ok($this->present($row->fresh('venue')), 'تم تحديث العرض ونشره مباشرة.');
+        $fresh = $row->fresh('venue');
+        if (\Illuminate\Support\Facades\Schema::hasColumn('venue_offers', 'announcement_sent_at')) {
+            $fresh->forceFill(['announcement_sent_at' => null])->save();
+        }
+        $announcements->announce($fresh, true);
+
+        return $this->ok($this->present($fresh), 'تم تحديث العرض ونشره مباشرة وإرسال إشعار للعملاء.');
     }
 
     public function destroy(Request $request, int $offer)

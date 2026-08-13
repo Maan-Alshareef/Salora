@@ -410,7 +410,7 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
           ),
           const SizedBox(height: 5),
           const Text(
-            'اختر وسيلة الدفع وحساب المستلم. بعد تثبيت الاختيار يصدر النظام مطالبة دفع رسمية بالمبلغ والحساب والمهلة.',
+            'اختر وسيلة الدفع وحساب المستلم. بعد تثبيت الاختيار يصدر النظام مطالبة دفع رسمية بالمبلغ والحساب.',
             style: TextStyle(color: AppColors.textSecondary, height: 1.5),
           ),
           const SizedBox(height: 14),
@@ -648,7 +648,7 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'بعد الرفع يبقى الحجز محجوزاً وتبدأ مهلة مراجعة مدتها 12 ساعة. لا يصبح الحجز مؤكداً إلا بعد قبول صاحب المبلغ للإيصال.',
+              'بعد الرفع يبقى الحجز بانتظار مراجعة صاحب المبلغ. لا توجد مهلة للمراجعة، ولا يصبح الحجز مؤكداً إلا بعد قبول الإيصال.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: AppColors.textSecondary,
@@ -835,10 +835,6 @@ class PaymentClaimCard extends StatelessWidget {
             ),
             const Divider(height: 28),
             _line('المبلغ المطلوب', _amount(), bold: true),
-            _line(
-              'آخر مهلة للدفع',
-              invoice?['payment_deadline_at'] ?? invoice?['due_at'],
-            ),
             const SizedBox(height: 10),
             Container(
               width: double.infinity,
@@ -848,7 +844,7 @@ class PaymentClaimCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
               ),
               child: const Text(
-                'ادفع خلال 6 ساعات، ثم ارفع إيصال الدفع الصادر عن جهة الدفع. هذه المطالبة لا تثبت أن الدفع تم.',
+                'ادفع وارفع إيصال الدفع في أي وقت ما دام الحجز فعالاً. لا توجد مهلة للدفع، وهذه المطالبة لا تثبت أن الدفع تم.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Color(0xff7a5c00),

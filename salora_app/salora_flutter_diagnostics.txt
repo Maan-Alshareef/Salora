@@ -1,0 +1,153 @@
+Analyzing salora_app...                                         
+
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\core\widgets\app_logo.dart:37:42 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\core\widgets\app_logo.dart:70:48 - deprecated_member_use
+   info - Statements in an if should be enclosed in a block - lib\core\widgets\app_logo.dart:108:19 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\core\widgets\app_logo.dart:108:49 - curly_braces_in_flow_control_structures
+   info - Unnecessary use of multiple underscores - lib\core\widgets\user_avatar.dart:38:27 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\core\widgets\user_avatar.dart:38:31 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\core\widgets\user_avatar.dart:46:27 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\core\widgets\user_avatar.dart:46:31 - unnecessary_underscores
+   info - Statements in an if should be enclosed in a block - lib\models\booking_model.dart:307:9 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\models\booking_model.dart:350:5 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\models\booking_model.dart:369:5 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\models\booking_model.dart:379:5 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\models\booking_model.dart:389:5 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\models\booking_model.dart:393:5 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\models\booking_model.dart:398:5 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\models\booking_model.dart:403:5 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\models\booking_model.dart:407:5 - curly_braces_in_flow_control_structures
+warning - Unused import: '../core/utils/arabic_text.dart' - lib\models\invoice_item.dart:1:8 - unused_import
+   info - Parameters ''id', 'name', 'price', 'rating', 'capacity', 'description', 'services', 'amenities', 'eventTypes', 'reviewsCount', 'hasOffer', 'discountPercentage', 'latitude', and 'longitude'' could be super parameters - lib\models\venue.dart:6:3 - use_super_parameters
+   info - Statements in an if should be enclosed in a block - lib\models\venue_model.dart:62:7 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\models\venue_model.dart:400:5 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\models\venue_model.dart:405:5 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\models\venue_model.dart:411:5 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\models\venue_model.dart:444:5 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\providers\auth_provider.dart:375:7 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\providers\auth_provider.dart:377:7 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\providers\booking_provider.dart:30:9 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\providers\booking_provider.dart:50:7 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\providers\booking_provider.dart:141:7 - curly_braces_in_flow_control_structures
+   info - Use the null-aware marker '?' rather than a null check via an 'if' - lib\providers\event_provider.dart:110:7 - use_null_aware_elements
+   info - Use the null-aware marker '?' rather than a null check via an 'if' - lib\providers\provider_account_provider.dart:194:7 - use_null_aware_elements
+warning - The declaration '_unwrapData' isn't referenced - lib\salora_v2\salora_booking_actions_panel.dart:397:24 - unused_element
+   info - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre - lib\salora_v2\salora_owner_booking_settings_page.dart:389:15 - deprecated_member_use
+   info - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre - lib\salora_v2\salora_owner_booking_settings_page.dart:406:17 - deprecated_member_use
+   info - Statements in an if should be enclosed in a block - lib\salora_v2\salora_owner_booking_settings_page.dart:458:23 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\salora_v2\salora_owner_booking_settings_page.dart:474:23 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\salora_v2\salora_owner_booking_settings_page.dart:508:15 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\salora_v2\salora_owner_booking_settings_page.dart:513:15 - curly_braces_in_flow_control_structures
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\auth\splash_screen.dart:80:37 - deprecated_member_use
+   info - Unnecessary use of multiple underscores - lib\screens\booking\booking_details_screen.dart:126:35 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\booking\booking_details_screen.dart:126:39 - unnecessary_underscores
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\booking\booking_screen.dart:157:41 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\booking\booking_screen.dart:159:60 - deprecated_member_use
+warning - The value of the field '_startTimes' isn't used - lib\screens\booking\booking_screen.dart:273:16 - unused_field
+warning - The declaration '_endTimesFor' isn't referenced - lib\screens\booking\booking_screen.dart:294:16 - unused_element
+warning - The declaration '_timeDropdown' isn't referenced - lib\screens\booking\booking_screen.dart:301:10 - unused_element
+warning - The declaration '_availabilityPanel' isn't referenced - lib\screens\booking\booking_screen.dart:318:10 - unused_element
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\booking\booking_screen.dart:326:55 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\booking\booking_screen.dart:356:28 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\booking\booking_screen.dart:358:47 - deprecated_member_use
+warning - The declaration '_validateAvailability' isn't referenced - lib\screens\booking\booking_screen.dart:464:16 - unused_element
+   info - 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre - lib\screens\booking\booking_screen.dart:548:11 - deprecated_member_use
+   info - 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre - lib\screens\booking\booking_screen.dart:549:11 - deprecated_member_use
+   info - Statements in an if should be enclosed in a block - lib\screens\booking\booking_screen.dart:828:9 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\booking\booking_screen.dart:832:9 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\booking\booking_screen.dart:834:9 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\booking\booking_screen.dart:842:9 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\booking\booking_screen.dart:844:9 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\booking\booking_screen.dart:854:7 - curly_braces_in_flow_control_structures
+warning - The declaration '_eventTypeFromLabel' isn't referenced - lib\screens\booking\booking_screen.dart:912:13 - unused_element
+   info - Statements in an if should be enclosed in a block - lib\screens\booking\booking_screen.dart:1004:7 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\booking\booking_screen.dart:1010:7 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\booking\booking_screen.dart:1016:7 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\booking\booking_screen.dart:1021:7 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\booking\booking_screen.dart:1027:7 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\booking\booking_screen.dart:1034:7 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\booking\booking_screen.dart:1038:7 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\booking\booking_screen.dart:1042:7 - curly_braces_in_flow_control_structures
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\booking\booking_summary_screen.dart:57:62 - deprecated_member_use
+   info - Don't use 'BuildContext's across async gaps - lib\screens\booking\booking_summary_screen.dart:128:45 - use_build_context_synchronously
+   info - Unnecessary use of multiple underscores - lib\screens\booking\invoice_document_screen.dart:374:41 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\booking\invoice_document_screen.dart:374:45 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\booking\invoice_document_screen.dart:485:43 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\booking\invoice_document_screen.dart:485:47 - unnecessary_underscores
+   info - 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre - lib\screens\booking\invoice_payment_screen.dart:431:19 - deprecated_member_use
+   info - 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre - lib\screens\booking\invoice_payment_screen.dart:432:19 - deprecated_member_use
+   info - Unnecessary use of multiple underscores - lib\screens\booking\invoice_payment_screen.dart:448:45 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\booking\invoice_payment_screen.dart:448:49 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\booking\invoice_payment_screen.dart:818:41 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\booking\invoice_payment_screen.dart:818:45 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\booking\my_bookings_screen.dart:61:37 - unnecessary_underscores
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\booking\my_bookings_screen.dart:179:22 - deprecated_member_use
+   info - Unnecessary use of multiple underscores - lib\screens\compare\compare_screen.dart:87:69 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\compare\compare_screen.dart:87:73 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\compare\compare_screen.dart:88:67 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\compare\compare_screen.dart:88:71 - unnecessary_underscores
+   info - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre - lib\screens\events\create_event_screen.dart:116:9 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\events\create_event_screen.dart:205:62 - deprecated_member_use
+   info - Unnecessary use of multiple underscores - lib\screens\events\my_events_screen.dart:63:47 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\home\home_screen.dart:198:68 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\home\home_screen.dart:198:72 - unnecessary_underscores
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\invitations\invitation_screen.dart:226:153 - deprecated_member_use
+warning - Unused import: '../../core/network/api_client.dart' - lib\screens\owner_join\owner_join_screen.dart:6:8 - unused_import
+   info - Don't use 'BuildContext's across async gaps - lib\screens\owner_join\owner_join_screen.dart:137:11 - use_build_context_synchronously
+   info - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre - lib\screens\owner_join\owner_join_screen.dart:299:23 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner_join\owner_join_screen.dart:358:132 - deprecated_member_use
+   info - Don't use 'BuildContext's across async gaps - lib\screens\profile\edit_profile_screen.dart:211:13 - use_build_context_synchronously
+   info - Statements in an if should be enclosed in a block - lib\screens\provider\business_finance_screen.dart:73:7 - curly_braces_in_flow_control_structures
+   info - Unnecessary use of multiple underscores - lib\screens\provider\business_finance_screen.dart:284:43 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\provider\business_finance_screen.dart:284:47 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\provider\business_finance_screen.dart:431:41 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\provider\business_finance_screen.dart:431:45 - unnecessary_underscores
+   info - Don't use 'BuildContext's across async gaps - lib\screens\provider\business_finance_screen.dart:558:13 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\provider\business_finance_screen.dart:614:15 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\provider\business_finance_screen.dart:619:15 - use_build_context_synchronously
+   info - Unnecessary use of multiple underscores - lib\screens\provider\provider_services_screen.dart:146:45 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\provider\provider_services_screen.dart:146:49 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\provider\provider_services_screen.dart:497:37 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\provider\provider_services_screen.dart:497:41 - unnecessary_underscores
+   info - Don't use 'BuildContext's across async gaps - lib\screens\provider\service_packages_screen.dart:156:19 - use_build_context_synchronously
+   info - Statements in an if should be enclosed in a block - lib\screens\services\provider_details_screen.dart:53:9 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\services\provider_details_screen.dart:235:7 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\services\provider_details_screen.dart:237:7 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\services\provider_details_screen.dart:247:7 - curly_braces_in_flow_control_structures
+   info - Unnecessary use of multiple underscores - lib\screens\services\provider_details_screen.dart:300:45 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\services\provider_details_screen.dart:300:49 - unnecessary_underscores
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\services\service_booking_sheet.dart:122:44 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\services\service_booking_sheet.dart:152:43 - deprecated_member_use
+   info - 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre - lib\screens\services\service_booking_sheet.dart:211:9 - deprecated_member_use
+   info - 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre - lib\screens\services\service_booking_sheet.dart:212:9 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\services\service_details_screen.dart:76:40 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\services\service_details_screen.dart:243:48 - deprecated_member_use
+   info - Unnecessary use of multiple underscores - lib\screens\services\service_details_screen.dart:280:31 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\services\service_details_screen.dart:280:35 - unnecessary_underscores
+   info - Statements in an if should be enclosed in a block - lib\screens\services\services_screen.dart:64:9 - curly_braces_in_flow_control_structures
+   info - Unnecessary use of multiple underscores - lib\screens\services\services_screen.dart:361:51 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\services\services_screen.dart:361:55 - unnecessary_underscores
+   info - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre - lib\screens\support\complaint_form_screen.dart:56:13 - deprecated_member_use
+   info - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre - lib\screens\support\complaint_form_screen.dart:66:13 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\support\support_center_screen.dart:98:64 - deprecated_member_use
+   info - Unnecessary use of multiple underscores - lib\screens\venue\venue_details_screen.dart:230:39 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\venue\venue_details_screen.dart:230:43 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\venue\venue_details_screen.dart:236:39 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\venue\venue_details_screen.dart:236:43 - unnecessary_underscores
+   info - Statements in an if should be enclosed in a block - lib\screens\venue\venue_details_screen.dart:450:7 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\venue\venue_details_screen.dart:848:7 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\venue\venue_details_screen.dart:855:7 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\venue\venue_details_screen.dart:861:7 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\venue\venue_details_screen.dart:866:7 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\venue\venue_details_screen.dart:871:7 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\venue\venue_details_screen.dart:883:7 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\venue\venue_details_screen.dart:924:13 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\venue\venue_details_screen.dart:929:13 - curly_braces_in_flow_control_structures
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\glass_card.dart:10:55 - deprecated_member_use
+   info - Unnecessary use of multiple underscores - lib\widgets\venue_card.dart:288:27 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\widgets\venue_card.dart:288:31 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\widgets\venue_card.dart:296:25 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\widgets\venue_card.dart:296:29 - unnecessary_underscores
+   info - The imported package 'flutter_test' isn't a dependency of the importing package - test\widget_test.dart:2:8 - depend_on_referenced_packages
+
+149 issues found. (ran in 8.2s)

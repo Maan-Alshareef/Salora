@@ -15,7 +15,6 @@ class BookingWorkflowService
             SaloraStatus::BOOKING_PENDING_PAYMENT,
             SaloraStatus::BOOKING_OWNER_REJECTED,
             SaloraStatus::BOOKING_CANCELLED,
-            SaloraStatus::BOOKING_EXPIRED,
         ],
         SaloraStatus::BOOKING_PENDING_PAYMENT => [
             SaloraStatus::BOOKING_PAYMENT_UNDER_REVIEW,

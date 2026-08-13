@@ -20,6 +20,61 @@ class BookingDetailsScreen extends StatelessWidget {
   final BookingModel booking;
   const BookingDetailsScreen({super.key, required this.booking});
 
+  static List<int> _clockParts(String value) {
+    final match = RegExp(r'(\d{1,2}):(\d{2})').firstMatch(value);
+    return <int>[
+      int.tryParse(match?.group(1) ?? '') ?? 0,
+      int.tryParse(match?.group(2) ?? '') ?? 0,
+    ];
+  }
+
+  static bool _isRemoteReceipt(String value) {
+    final uri = Uri.tryParse(value.trim());
+    return uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
+  }
+
+  Widget _receiptPreview(BuildContext context, String source) {
+    if (_isRemoteReceipt(source)) {
+      final token = context.read<ApiClient>().token?.trim() ?? '';
+      return Image.network(
+        source,
+        headers: token.isEmpty
+            ? const <String, String>{}
+            : <String, String>{'Authorization': 'Bearer $token'},
+        height: 190,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Container(
+          height: 150,
+          color: AppColors.surface,
+          alignment: Alignment.center,
+          child: const Text(
+            'تم رفع الإيصال، لكن تعذر تحميل المعاينة الآن.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.textSecondary),
+          ),
+        ),
+      );
+    }
+
+    return Image.file(
+      File(source),
+      height: 190,
+      width: double.infinity,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => Container(
+        height: 150,
+        color: AppColors.surface,
+        alignment: Alignment.center,
+        child: const Text(
+          'تم رفع الإيصال، لكن تعذر تحميل المعاينة الآن.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: AppColors.textSecondary),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bookings = context.watch<BookingProvider>().bookings;
@@ -33,6 +88,25 @@ class BookingDetailsScreen extends StatelessWidget {
     final settings = context.watch<AppSettingsProvider>();
     final bookingId = int.tryParse(fresh.id);
     final venueId = int.tryParse(fresh.venueId);
+    final startParts = _clockParts(fresh.startTime);
+    final endParts = _clockParts(fresh.endTime);
+    final eventStartAt = DateTime(
+      fresh.eventDate.year,
+      fresh.eventDate.month,
+      fresh.eventDate.day,
+      startParts[0],
+      startParts[1],
+    );
+    var eventEndAt = DateTime(
+      fresh.eventDate.year,
+      fresh.eventDate.month,
+      fresh.eventDate.day,
+      endParts[0],
+      endParts[1],
+    );
+    if (!eventEndAt.isAfter(eventStartAt)) {
+      eventEndAt = eventEndAt.add(const Duration(days: 1));
+    }
     return Scaffold(
       appBar: AppBar(title: const Text('تفاصيل الحجز')),
       body: ListView(
@@ -91,23 +165,7 @@ class BookingDetailsScreen extends StatelessWidget {
             const SizedBox(height: 10),
             ClipRRect(
               borderRadius: BorderRadius.circular(18),
-              child: Image.file(
-                File(fresh.receiptPath!),
-                height: 190,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  height: 150,
-                  color: AppColors.surface,
-                  child: Center(
-                    child: Text(
-                      fresh.receiptPath!,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: AppColors.textSecondary),
-                    ),
-                  ),
-                ),
-              ),
+              child: _receiptPreview(context, fresh.receiptPath!),
             ),
           ],
           const SizedBox(height: 18),
@@ -125,7 +183,7 @@ class BookingDetailsScreen extends StatelessWidget {
             child: Column(
               children: [
                 ...fresh.invoiceItems.map(
-                  (item) => Padding(
+                      (item) => Padding(
                     padding: const EdgeInsets.symmetric(vertical: 7),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -190,85 +248,85 @@ class BookingDetailsScreen extends StatelessWidget {
                 children: fresh.providerRequests
                     .map(
                       (request) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 7),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                    padding: const EdgeInsets.symmetric(vertical: 7),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                request.serviceName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              Text(
+                                '${request.providerName} • ${request.statusLabel} • ${request.paymentStatusLabel}',
+                                style: const TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    request.serviceName,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                  Text(
-                                    '${request.providerName} • ${request.statusLabel} • ${request.paymentStatusLabel}',
-                                    style: const TextStyle(
-                                      color: AppColors.textSecondary,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
+                            Text(
+                              settings.formatPrice(request.priceSyp),
+                              style: const TextStyle(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w900,
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  settings.formatPrice(request.priceSyp),
-                                  style: const TextStyle(
-                                    color: AppColors.primary,
-                                    fontWeight: FontWeight.w900,
+                            if (request.canUploadPayment) ...[
+                              const SizedBox(height: 6),
+                              FilledButton.tonal(
+                                onPressed: () async {
+                                  await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          ProviderServicePaymentScreen(
+                                            request: request,
+                                          ),
+                                    ),
+                                  );
+                                  if (context.mounted) {
+                                    await context
+                                        .read<BookingProvider>()
+                                        .loadMyBookings();
+                                  }
+                                },
+                                child: const Text('دفع الخدمة'),
+                              ),
+                            ],
+                            if (request.canViewPaymentDocument) ...[
+                              const SizedBox(height: 6),
+                              OutlinedButton(
+                                onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        ProviderServicePaymentScreen(
+                                          request: request,
+                                          showDocument: true,
+                                        ),
                                   ),
                                 ),
-                                if (request.canUploadPayment) ...[
-                                  const SizedBox(height: 6),
-                                  FilledButton.tonal(
-                                    onPressed: () async {
-                                      await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) =>
-                                              ProviderServicePaymentScreen(
-                                                request: request,
-                                              ),
-                                        ),
-                                      );
-                                      if (context.mounted) {
-                                        await context
-                                            .read<BookingProvider>()
-                                            .loadMyBookings();
-                                      }
-                                    },
-                                    child: const Text('دفع الخدمة'),
-                                  ),
-                                ],
-                                if (request.canViewPaymentDocument) ...[
-                                  const SizedBox(height: 6),
-                                  OutlinedButton(
-                                    onPressed: () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            ProviderServicePaymentScreen(
-                                              request: request,
-                                              showDocument: true,
-                                            ),
-                                      ),
-                                    ),
-                                    child: const Text('وثيقة الدفع'),
-                                  ),
-                                ],
-                              ],
-                            ),
+                                child: const Text('وثيقة الدفع'),
+                              ),
+                            ],
                           ],
                         ),
-                      ),
-                    )
+                      ],
+                    ),
+                  ),
+                )
                     .toList(),
               ),
             ),
@@ -278,13 +336,9 @@ class BookingDetailsScreen extends StatelessWidget {
             SaloraBookingActionsPanel(
               bookingId: bookingId,
               venueId: venueId,
-              eventStartAt: DateTime(
-                fresh.eventDate.year,
-                fresh.eventDate.month,
-                fresh.eventDate.day,
-                int.tryParse(fresh.startTime.split(':').first) ?? 0,
-                int.tryParse(fresh.startTime.split(':').last) ?? 0,
-              ),
+              currentGuestCount: fresh.guests,
+              eventStartAt: eventStartAt,
+              eventEndAt: eventEndAt,
               api: SaloraBookingV2Api(
                 baseUrl: context.read<ApiClient>().baseUrl,
                 tokenProvider: () async => context.read<ApiClient>().token,
@@ -338,7 +392,7 @@ class BookingDetailsScreen extends StatelessWidget {
                         invoiceId: fresh.invoiceId!,
                         sourceTitle: fresh.venueName,
                         sourceSubtitle:
-                            '${fresh.eventDate.year}-${fresh.eventDate.month}-${fresh.eventDate.day} • ${fresh.startTime} - ${fresh.endTime}',
+                        '${fresh.eventDate.year}-${fresh.eventDate.month}-${fresh.eventDate.day} • ${fresh.startTime} - ${fresh.endTime}',
                       ),
                     ),
                   ),
@@ -365,7 +419,7 @@ class BookingDetailsScreen extends StatelessWidget {
               ),
             ),
           if ((fresh.status == BookingStatus.paid ||
-                  fresh.status == BookingStatus.completed) &&
+              fresh.status == BookingStatus.completed) &&
               fresh.invoiceId != null)
             ElevatedButton.icon(
               onPressed: () => Navigator.push(
@@ -405,11 +459,11 @@ class BookingDetailsScreen extends StatelessWidget {
   Widget _timeline(BookingModel booking) {
     final paymentUploaded =
         booking.status == BookingStatus.paymentUploaded ||
-        booking.status == BookingStatus.paid ||
-        booking.status == BookingStatus.completed;
+            booking.status == BookingStatus.paid ||
+            booking.status == BookingStatus.completed;
     final confirmed =
         booking.status == BookingStatus.paid ||
-        booking.status == BookingStatus.completed;
+            booking.status == BookingStatus.completed;
     final steps = <_TimelineItem>[
       const _TimelineItem('تم إنشاء الحجز وحجز الموعد مؤقتًا', true),
       _TimelineItem('رفع إيصال الدفع', paymentUploaded),
@@ -426,14 +480,14 @@ class BookingDetailsScreen extends StatelessWidget {
         children: steps
             .map(
               (s) => ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(
-                  s.done ? Icons.check_circle : Icons.radio_button_unchecked,
-                  color: s.done ? AppColors.success : AppColors.textSecondary,
-                ),
-                title: Text(s.title),
-              ),
-            )
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(
+              s.done ? Icons.check_circle : Icons.radio_button_unchecked,
+              color: s.done ? AppColors.success : AppColors.textSecondary,
+            ),
+            title: Text(s.title),
+          ),
+        )
             .toList(),
       ),
     );

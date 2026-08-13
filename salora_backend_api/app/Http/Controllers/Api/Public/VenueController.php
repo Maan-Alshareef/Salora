@@ -128,7 +128,6 @@ class VenueController extends BaseApiController
             'opening_hours' => $dayHours,
             'is_closed' => is_array($dayHours) && !($dayHours['enabled'] ?? false),
             'unavailable_intervals' => $availability->unavailableIntervals($venue->id, $date->toDateString()),
-            'hold_hours' => VenueAvailabilityService::PENDING_HOLD_HOURS,
         ]);
     }
 

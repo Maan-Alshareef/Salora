@@ -210,18 +210,104 @@ class AdminVenueController extends BaseApiController
             ]),
         ];
 
+        $candidates = array_values(array_unique([
+            ...array_keys($revision->payload ?? []),
+            ...($revision->event_type_ids !== null ? ['event_types'] : []),
+            ...($revision->service_ids !== null ? ['services'] : []),
+            ...($revision->replace_images ? ['images'] : []),
+            ...($revision->replace_videos ? ['videos'] : []),
+        ]));
+        $changedFields = array_values(array_filter(
+            $candidates,
+            fn (string $field) => $this->revisionFieldChanged($field, $current[$field] ?? null, $proposed[$field] ?? null),
+        ));
+
+        // The owner dashboard edits Arabic/English mirror fields through one input.
+        // When both twins carry the same before/after value, display one logical
+        // field instead of counting the same edit twice.
+        $changedFields = $this->collapseMirroredFields($changedFields, $current, $proposed);
+
+        // Compatibility cleanup for revisions created by the older owner form:
+        // it used to send an empty opening_hours object and a recalculated currency
+        // counterpart even when the owner did not edit those fields.
+        if (array_key_exists('opening_hours', $revision->payload ?? []) && empty(($revision->payload ?? [])['opening_hours'])) {
+            $changedFields = array_values(array_filter($changedFields, fn ($field) => $field !== 'opening_hours'));
+        }
+        if (!in_array('price_syp', $changedFields, true) && in_array('price_usd', $changedFields, true) && array_key_exists('price_syp', $revision->payload ?? [])) {
+            $changedFields = array_values(array_filter($changedFields, fn ($field) => $field !== 'price_usd'));
+        }
+        if (!in_array('price_usd', $changedFields, true) && in_array('price_syp', $changedFields, true) && array_key_exists('price_usd', $revision->payload ?? [])) {
+            $changedFields = array_values(array_filter($changedFields, fn ($field) => $field !== 'price_syp'));
+        }
+
         return [
             ...$revision->toArray(),
             'current_snapshot' => $current,
             'proposed_snapshot' => $proposed,
-            'changed_fields' => array_values(array_unique([
-                ...array_keys($revision->payload ?? []),
-                ...($revision->event_type_ids !== null ? ['event_types'] : []),
-                ...($revision->service_ids !== null ? ['services'] : []),
-                ...($revision->replace_images ? ['images'] : []),
-                ...($revision->replace_videos ? ['videos'] : []),
-            ])),
+            'changed_fields' => $changedFields,
         ];
+    }
+
+    private function revisionFieldChanged(string $field, mixed $current, mixed $proposed): bool
+    {
+        return $this->revisionComparable($field, $current) !== $this->revisionComparable($field, $proposed);
+    }
+
+    private function revisionComparable(string $field, mixed $value): mixed
+    {
+        if ($value instanceof \Illuminate\Support\Collection) $value = $value->toArray();
+
+        if (in_array($field, ['latitude', 'longitude', 'price_syp', 'price_usd', 'capacity'], true)) {
+            if ($value === null || $value === '') return null;
+            return round((float) $value, 6);
+        }
+
+        $items = is_array($value) ? $value : [];
+        if ($field === 'event_types') {
+            return collect($items)->map(fn ($item) => (int) (($item['id'] ?? null) ?: 0))->filter()->unique()->sort()->values()->all();
+        }
+        if ($field === 'services') {
+            return collect($items)->map(fn ($item) => (int) (($item['id'] ?? null) ?: 0))->filter()->unique()->sort()->values()->all();
+        }
+        if ($field === 'images') {
+            return collect($items)->map(fn ($item) => trim((string) ($item['image_url'] ?? $item['url'] ?? '')))->filter()->values()->all();
+        }
+        if ($field === 'videos') {
+            return collect($items)->map(fn ($item) => trim((string) ($item['video_url'] ?? $item['url'] ?? '')))->filter()->values()->all();
+        }
+        if (in_array($field, ['amenities', 'policies', 'vendor_categories'], true)) {
+            return collect($items)->map(fn ($item) => trim((string) $item))->filter()->unique()->sort()->values()->all();
+        }
+        if ($field === 'opening_hours') {
+            return $this->canonicalArray($items);
+        }
+
+        if (is_array($value)) return $this->canonicalArray($value);
+        return trim((string) ($value ?? ''));
+    }
+
+    private function collapseMirroredFields(array $fields, array $current, array $proposed): array
+    {
+        foreach ([['name_ar', 'name_en'], ['description_ar', 'description_en']] as [$primary, $mirror]) {
+            if (!in_array($primary, $fields, true) || !in_array($mirror, $fields, true)) continue;
+            $currentPrimary = trim((string) ($current[$primary] ?? ''));
+            $currentMirror = trim((string) ($current[$mirror] ?? ''));
+            $proposedPrimary = trim((string) ($proposed[$primary] ?? ''));
+            $proposedMirror = trim((string) ($proposed[$mirror] ?? ''));
+            if ($currentPrimary === $currentMirror && $proposedPrimary === $proposedMirror) {
+                $fields = array_values(array_filter($fields, fn ($field) => $field !== $mirror));
+            }
+        }
+        return $fields;
+    }
+
+    private function canonicalArray(array $value): array
+    {
+        foreach ($value as $key => $item) {
+            if (is_array($item)) $value[$key] = $this->canonicalArray($item);
+        }
+        if (! array_is_list($value)) ksort($value);
+        return $value;
     }
 
     private function deleteLocalFile(?string $url): void

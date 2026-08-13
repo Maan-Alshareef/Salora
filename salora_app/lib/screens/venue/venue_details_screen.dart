@@ -139,6 +139,32 @@ class _VenueDetailsScreenState extends State<VenueDetailsScreen> {
                       ),
                     ],
                   ),
+                  if (venue.hasDiscount) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: AppColors.success.withValues(alpha: .12),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.success.withValues(alpha: .35)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.local_offer_outlined, color: AppColors.success),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              venue.discountPercentage == null
+                                  ? 'يوجد عرض فعال على هذه الصالة'
+                                  : 'عرض فعال: خصم ${venue.discountPercentage}% — السعر الظاهر محدث بعد الخصم',
+                              style: const TextStyle(fontWeight: FontWeight.w800),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,

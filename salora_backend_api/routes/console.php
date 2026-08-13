@@ -44,8 +44,3 @@ Schedule::command('salora:prune-email-otps')
     ->withoutOverlapping();
 require __DIR__.'/salora_uc01_uc20_console.php';
 
-// SALORA_PAYMENT_DEADLINE_SCHEDULE_START
-\Illuminate\Support\Facades\Schedule::command('salora:process-payment-deadlines')
-    ->hourly()
-    ->withoutOverlapping();
-// SALORA_PAYMENT_DEADLINE_SCHEDULE_END

@@ -119,7 +119,14 @@ class ProviderServiceRequestController extends BaseApiController
                         )
                         ->whereNotIn(
                             'booking_status',
-                            ['cancelled', 'owner_rejected', 'completed'],
+                            [
+                                'cancelled',
+                                'owner_rejected',
+                                'rejected',
+                                'completed',
+                                'expired',
+                                'refunded',
+                            ],
                         );
                 })
                 ->lockForUpdate()
@@ -153,8 +160,6 @@ class ProviderServiceRequestController extends BaseApiController
                     'booking_id' => $locked->booking_id,
                     'request_id' => $locked->id,
                     'invoice_id' => $invoice->id,
-                    'payment_deadline_at' =>
-                        $invoice->payment_deadline_at?->toIso8601String(),
                     'target_route' => 'booking_details',
                 ],
             );

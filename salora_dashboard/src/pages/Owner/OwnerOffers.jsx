@@ -8,7 +8,8 @@ export default function OwnerOffers() {
   const submit = async (e) => {
     e.preventDefault();
     if (!form.title.trim()) return alert("اكتب اسم العرض.");
-    await addOffer({ ...form, target: form.venueId ? "specific_venue" : "owner_venues", type: "percentage", status: "Active" });
+    if (!form.venueId) return alert("اختر الصالة التي سيطبق عليها العرض.");
+    await addOffer({ ...form, target: "specific_venue", type: "percentage", status: "Active" });
     setForm({ title: "", discount: 10, venueId: "", startsAt: "", endsAt: "" });
   };
 
@@ -16,13 +17,13 @@ export default function OwnerOffers() {
 
   return (
     <div className="space-y-6 pb-12 text-white" dir="rtl">
-      <div><h1 className="text-3xl font-black bg-clip-text text-transparent bg-gradient-to-r from-amber-300 to-white">🏷️ عروضي وخصوماتي</h1><p className="mt-2 text-sm text-slate-400">أنشئ عرضاً لصالة من صالاتك وسيظهر مباشرة للعميل في التطبيق بدون انتظار موافقة الأدمن.</p></div>
+      <div><h1 className="text-3xl font-black bg-clip-text text-transparent bg-gradient-to-r from-amber-300 to-white">🏷️ عروضي وخصوماتي</h1><p className="mt-2 text-sm text-slate-400">أنشئ عرضاً لصالة من صالاتك وسيظهر مباشرة في التطبيق بدون موافقة الأدمن، مع إرسال إشعار Firebase للعملاء لفتح الصالة والعرض.</p></div>
       <form onSubmit={submit} className="rounded-3xl border border-amber-400/20 bg-white/[.04] p-5">
         <h2 className="mb-4 text-lg font-black text-amber-200">➕ نشر عرض جديد</h2>
         <div className="grid gap-3 md:grid-cols-[1fr_140px_1fr_170px_170px]">
           <input className="field-surface" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="اسم العرض" />
-          <input className="field-surface" type="number" min="1" max="90" value={form.discount} onChange={(e) => setForm({ ...form, discount: e.target.value })} placeholder="نسبة الخصم" />
-          <select className="field-surface" value={form.venueId} onChange={(e) => setForm({ ...form, venueId: e.target.value })}><option value="">كل صالاتي</option>{ownerVenues.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select>
+          <input className="field-surface" type="number" min="1" max="50" value={form.discount} onChange={(e) => setForm({ ...form, discount: e.target.value })} placeholder="نسبة الخصم" />
+          <select required className="field-surface" value={form.venueId} onChange={(e) => setForm({ ...form, venueId: e.target.value })}><option value="">اختر الصالة</option>{ownerVenues.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select>
           <input className="field-surface" type="date" value={form.startsAt} onChange={(e) => setForm({ ...form, startsAt: e.target.value })} />
           <input className="field-surface" type="date" value={form.endsAt} onChange={(e) => setForm({ ...form, endsAt: e.target.value })} />
         </div>

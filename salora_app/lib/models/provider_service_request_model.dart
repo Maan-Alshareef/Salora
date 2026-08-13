@@ -23,7 +23,6 @@ class ProviderServiceRequestModel {
   final String invoiceNumber;
   final String invoiceStatus;
   final String? receiptNumber;
-  final String? paymentDeadlineAt;
   final String status;
   final String paymentStatus;
   final String? paymentMethod;
@@ -57,7 +56,6 @@ class ProviderServiceRequestModel {
     this.invoiceNumber = '',
     this.invoiceStatus = 'unpaid',
     this.receiptNumber,
-    this.paymentDeadlineAt,
     this.status = 'pending',
     this.paymentStatus = 'unpaid',
     this.paymentMethod,
@@ -107,7 +105,6 @@ class ProviderServiceRequestModel {
 
   bool get canUploadPayment =>
       status == 'accepted' &&
-      hasInvoice &&
       (paymentStatus == 'unpaid' || paymentStatus == 'rejected');
 
   bool get canReviewPayment =>
@@ -115,7 +112,7 @@ class ProviderServiceRequestModel {
       (paymentStatus == 'proof_uploaded' || paymentStatus == 'pending');
 
   bool get canViewPaymentDocument =>
-      hasInvoice &&
+      status == 'accepted' &&
       (paymentStatus == 'proof_uploaded' ||
           paymentStatus == 'pending' ||
           paymentStatus == 'approved' ||
@@ -148,6 +145,22 @@ class ProviderServiceRequestModel {
     final latestProof = invoice['latest_payment_proof'] is Map
         ? Map<String, dynamic>.from(invoice['latest_payment_proof'] as Map)
         : <String, dynamic>{};
+    final latestProofStatus = (latestProof['status'] ?? '')
+        .toString()
+        .toLowerCase();
+    final invoiceStatus = (invoice['status'] ?? '').toString().toLowerCase();
+    String resolvedPaymentStatus;
+    if (latestProofStatus == 'pending' || invoiceStatus == 'proof_uploaded') {
+      resolvedPaymentStatus = 'proof_uploaded';
+    } else if (latestProofStatus == 'approved' || invoiceStatus == 'paid') {
+      resolvedPaymentStatus = 'approved';
+    } else if (latestProofStatus == 'rejected') {
+      resolvedPaymentStatus = 'rejected';
+    } else {
+      resolvedPaymentStatus = (json['payment_status'] ?? 'unpaid')
+          .toString()
+          .toLowerCase();
+    }
 
     return ProviderServiceRequestModel(
       id: '${json['id'] ?? ''}',
@@ -206,22 +219,14 @@ class ProviderServiceRequestModel {
           .toString(),
       invoiceStatus: (invoice['status'] ?? 'unpaid').toString(),
       receiptNumber: invoice['receipt_number']?.toString(),
-      paymentDeadlineAt:
-          (json['payment_deadline_at'] ?? invoice['payment_deadline_at'])
-              ?.toString(),
       status: (json['status'] ?? 'pending').toString(),
-      paymentStatus:
-          (json['payment_status'] ??
-                  (latestProof['status'] == 'pending'
-                      ? 'proof_uploaded'
-                      : invoice['status'] == 'paid'
-                      ? 'approved'
-                      : 'unpaid'))
-              .toString(),
+      paymentStatus: resolvedPaymentStatus,
       paymentMethod: (latestProof['payment_method'] ?? json['payment_method'])
           ?.toString(),
       paymentProofUrl: _assetUrl(
-        (latestProof['image_full_url'] ?? json['payment_proof_url'])
+        (latestProof['image_full_url'] ??
+                latestProof['image_url'] ??
+                json['payment_proof_url'])
             ?.toString(),
       ),
       paymentRejectionReason:
@@ -248,7 +253,6 @@ class ProviderServiceRequestModel {
     'invoice_number': invoiceNumber,
     'invoice_status': invoiceStatus,
     'receipt_number': receiptNumber,
-    'payment_deadline_at': paymentDeadlineAt,
     'status': status,
     'payment_status': paymentStatus,
     'payment_method': paymentMethod,

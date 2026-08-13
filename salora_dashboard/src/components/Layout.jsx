@@ -125,7 +125,7 @@ export default function Layout({ children }) {
 }
 
 export function GlobalVenueInspector() {
-  const { globalViewVenue, setGlobalViewVenue, formatPricePair, arabicLabel } = useApp();
+  const { globalViewVenue, setGlobalViewVenue, formatPricePair, arabicLabel, currentRole } = useApp();
   if (!globalViewVenue) return null;
 
   const details = [
@@ -152,7 +152,7 @@ export function GlobalVenueInspector() {
         <div className="sticky -top-5 z-10 mb-5 flex items-start justify-between border-b border-white/10 bg-slate-950/95 pb-4 pt-1 backdrop-blur">
           <div>
             <h3 className="text-2xl font-black text-white">🏛️ تفاصيل الصالة كاملة</h3>
-            <p className="text-sm text-slate-400">الأدمن يستطيع مشاهدة كل بيانات الصالة والنزول لآخر التفاصيل قبل القبول أو الرفض.</p>
+            <p className="text-sm text-slate-400">{currentRole === "Owner" ? "عرض فقط لبيانات الصالة كما هي منشورة حالياً؛ لا يتم تعديل أي شيء من هذه النافذة." : "الأدمن يستطيع مشاهدة كل بيانات الصالة والنزول لآخر التفاصيل قبل القبول أو الرفض."}</p>
           </div>
           <button onClick={() => setGlobalViewVenue(null)} className="rounded-xl bg-white/5 px-3 py-2 text-slate-300 hover:bg-white/10">✕</button>
         </div>

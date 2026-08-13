@@ -48,10 +48,6 @@ class OwnerBookingController extends BaseApiController
             if ($locked->booking_status !== SaloraStatus::BOOKING_PENDING_OWNER_REVIEW) {
                 return $this->fail('يمكن قبول الحجوزات بانتظار مراجعة المالك فقط.', 422);
             }
-            if ($locked->expires_at?->isPast()) {
-                $availability->expireStalePending($locked->venue_id, $locked->event_date->toDateString());
-                return $this->fail('انتهت مهلة مراجعة هذا الطلب وأصبح الموعد متاحاً من جديد.', 422, ['code' => 'booking_request_expired']);
-            }
             if ($availability->hasConflict(
                 $locked->venue_id,
                 $locked->event_date->toDateString(),

@@ -48,7 +48,7 @@ const eventEmoji = {
 
 
 const arabicLabel = (value = "") => ({
-  Approved: "مقبول", Pending: "قيد المراجعة", Rejected: "مرفوض", Active: "فعال", Disabled: "معطل", Inactive: "غير نشط", Suspended: "مجمّد", Locked: "مقفول مؤقتاً", Deleted: "محذوف", Visible: "ظاهر", Hidden: "مخفي", Open: "مفتوحة", "In Progress": "قيد المعالجة", Answered: "تم الرد", Resolved: "تم الرد والحل", Closed: "مغلقة", Confirmed: "مؤكد", Completed: "مؤكد", Cancelled: "ملغي", "Pending Owner Review": "بانتظار الدفع", "Pending Payment": "بانتظار الدفع", "Owner Approved": "بانتظار الدفع", "Modification Requested": "طلب تعديل قيد المراجعة", "Cancellation Requested": "طلب إلغاء قيد المراجعة", Verified: "مدفوع ومقبول", "Pending Admin Verification": "بانتظار مراجعة المالك للدفع", "Payment Under Review": "قيد مراجعة الدفع", "Proof Uploaded": "تم رفع الإثبات", "Not Uploaded": "لم يتم رفع الإثبات", Unpaid: "غير مدفوع", "Rejected Proof": "إثبات الدفع مرفوض", "Re-upload Requested": "مطلوب إعادة رفع الإثبات", Refunded: "مسترد", Customer: "عميل", Owner: "مالك صالة", Provider: "مقدم خدمة", Admin: "مدير النظام", Wedding: "زفاف", Engagement: "خطوبة", Graduation: "تخرج", Birthday: "عيد ميلاد", "Family Event": "مناسبة عائلية", "Birthday / Family Event": "عيد ميلاد / مناسبة عائلية", Condolence: "عزاء", Conference: "مؤتمر", Meeting: "اجتماع", "Included Hall Service": "خدمة مجانية ضمن الصالة", "Paid Hall Upgrade": "خدمة مدفوعة إضافية", "External Vendor Service": "خدمة من مقدم خارجي", Lighting: "إضاءة", Catering: "ضيافة", تصوير: "تصوير", Service: "خدمة"
+  Approved: "مقبول", Pending: "قيد المراجعة", Rejected: "مرفوض", Active: "فعال", Disabled: "معطل", Inactive: "غير نشط", Suspended: "مجمّد", Locked: "مقفول مؤقتاً", Deleted: "محذوف", Visible: "ظاهر", Hidden: "مخفي", Open: "مفتوحة", "In Progress": "قيد المعالجة", Answered: "تم الرد", Resolved: "تم الرد والحل", Closed: "مغلقة", Confirmed: "مؤكد", Completed: "مؤكد", Expired: "منتهي سابقًا", Cancelled: "ملغي", "Pending Owner Review": "بانتظار الدفع", "Pending Payment": "بانتظار الدفع", "Owner Approved": "بانتظار الدفع", "Modification Requested": "طلب تعديل قيد المراجعة", "Cancellation Requested": "طلب إلغاء قيد المراجعة", Verified: "مدفوع ومقبول", "Pending Admin Verification": "بانتظار مراجعة المالك للدفع", "Payment Under Review": "قيد مراجعة الدفع", "Proof Uploaded": "تم رفع الإثبات", "Not Uploaded": "لم يتم رفع الإثبات", Unpaid: "غير مدفوع", "Rejected Proof": "إثبات الدفع مرفوض", "Re-upload Requested": "مطلوب إعادة رفع الإثبات", Refunded: "مسترد", Customer: "عميل", Owner: "مالك صالة", Provider: "مقدم خدمة", Admin: "مدير النظام", Wedding: "زفاف", Engagement: "خطوبة", Graduation: "تخرج", Birthday: "عيد ميلاد", "Family Event": "مناسبة عائلية", "Birthday / Family Event": "عيد ميلاد / مناسبة عائلية", Condolence: "عزاء", Conference: "مؤتمر", Meeting: "اجتماع", "Included Hall Service": "خدمة مجانية ضمن الصالة", "Paid Hall Upgrade": "خدمة مدفوعة إضافية", "External Vendor Service": "خدمة من مقدم خارجي", Lighting: "إضاءة", Catering: "ضيافة", تصوير: "تصوير", Service: "خدمة"
 }[value] || value);
 
 const serviceEmoji = {
@@ -105,6 +105,7 @@ const bookingStatusFromApi = (status = "") => {
   if (["pending_payment", "owner_approved", "approved_by_owner"].includes(value)) return BOOKING_STATUS.PENDING_PAYMENT || "Pending Payment";
   if (["payment_under_review"].includes(value)) return BOOKING_STATUS.PAYMENT_UNDER_REVIEW || "Payment Under Review";
   if (["modification_requested", "pending_modification"].includes(value)) return BOOKING_STATUS.MODIFICATION_REQUESTED || "Modification Requested";
+  if (["cancellation_pending_refund"].includes(value)) return BOOKING_STATUS.CANCELLED;
   if (["cancellation_requested", "pending_cancellation"].includes(value)) return BOOKING_STATUS.CANCELLATION_REQUESTED || "Cancellation Requested";
   if (["confirmed", "approved", "paid"].includes(value)) return BOOKING_STATUS.CONFIRMED;
   if (["completed", "done"].includes(value)) return BOOKING_STATUS.COMPLETED;
@@ -211,10 +212,10 @@ const bookingFromApi = (b = {}) => ({
   venue: b.venue?.name_ar || b.venue?.name_en || b.venue_name || "الصالة",
   eventType: b.event_type?.name_ar || b.event_type?.name_en || b.event_type || "المناسبة",
   eventName: b.event_name || "مناسبة",
-  date: toDateKey(b.event_date || b.date || ""),
-  time: toTimeKey(b.start_time || b.time || ""),
-  endTime: toTimeKey(b.end_time || b.endTime || ""),
-  guests: Number(b.guests_count || 0),
+  date: toDateKey(b.start_at || b.event_date || b.booking_date || b.date || ""),
+  time: toTimeKey(b.start_at || b.start_time || b.time || ""),
+  endTime: toTimeKey(b.end_at || b.end_time || b.endTime || ""),
+  guests: Number(b.guests_count || b.guest_count || b.number_of_guests || 0),
   amount: Number(b.total_usd || 0),
   amountSyp: Number(b.total_syp || 0),
   invoiceTotal: Number(b.total_usd || 0),
@@ -864,7 +865,7 @@ export function AppProvider({ children }) {
         google_place_id: updatedData.googlePlaceId || null,
         ...(updatedData.latitude !== null && updatedData.latitude !== undefined ? { latitude: Number(updatedData.latitude) } : {}),
         ...(updatedData.longitude !== null && updatedData.longitude !== undefined ? { longitude: Number(updatedData.longitude) } : {}),
-        opening_hours: updatedData.openingHours || {},
+        ...(updatedData.openingHours !== undefined ? { opening_hours: updatedData.openingHours || {} } : {}),
         capacity: Number(updatedData.capacity),
         ...(priceUsd > 0 ? { price_usd: priceUsd } : {}),
         ...(priceSyp > 0 ? { price_syp: priceSyp } : {}),
@@ -1304,7 +1305,7 @@ export function AppProvider({ children }) {
 
   const updateOfferStatus = async (id, status) => {
     if (currentRole !== ROLES.ADMIN) {
-      window.alert("مالك الصالة يرسل العرض للمراجعة، واعتماده من صلاحيات الأدمن.");
+      window.alert("عروض المالك تُنشر مباشرة من صفحة عروض صالاتي ولا تحتاج موافقة الأدمن.");
       return null;
     }
     try {

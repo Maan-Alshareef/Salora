@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\Customer\ComplaintController as CustomerComplaintCo
 use App\Http\Controllers\Api\Customer\CustomerBookingChangeRequestController;
 use App\Http\Controllers\Api\Customer\CustomerBookingController;
 use App\Http\Controllers\Api\Customer\CustomerEventController;
+use App\Http\Controllers\Api\Customer\CustomerInvitationController;
 use App\Http\Controllers\Api\Customer\PaymentProofController;
 use App\Http\Controllers\Api\Customer\ProviderServicePaymentController;
 use App\Http\Controllers\Api\Customer\ReviewController as CustomerReviewController;
@@ -118,6 +119,8 @@ Route::middleware(['auth:sanctum', 'account.active', 'role:customer'])->prefix('
     Route::get('/join-requests', [OwnerRequestController::class, 'mine']);
 
     Route::apiResource('/events', CustomerEventController::class);
+    Route::get('/events/{event}/invitation', [CustomerInvitationController::class, 'show']);
+    Route::put('/events/{event}/invitation', [CustomerInvitationController::class, 'upsert']);
     Route::post('/events/{event}/todos', [CustomerEventController::class, 'addTodo']);
     Route::put('/events/{event}/todos/{todoItem}', [CustomerEventController::class, 'updateTodo']);
     Route::delete('/events/{event}/todos/{todoItem}', [CustomerEventController::class, 'deleteTodo']);
@@ -129,6 +132,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'role:customer'])->prefix('
     Route::post('/bookings/{booking}/cancel', [CustomerBookingController::class, 'cancel']);
     Route::post('/bookings/{booking}/change-requests', [CustomerBookingChangeRequestController::class, 'store']);
     Route::post('/bookings/{booking}/payment-proof', [PaymentProofController::class, 'store']);
+    Route::get('/provider-service-requests/{providerRequest}/invoice', [ProviderServicePaymentController::class, 'invoice']);
     Route::post('/provider-service-requests/{providerRequest}/payment-proof', [ProviderServicePaymentController::class, 'store']);
 
     Route::post('/reviews', [CustomerReviewController::class, 'store']);

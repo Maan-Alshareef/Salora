@@ -22,11 +22,11 @@ Route::middleware(['auth:sanctum','account.active'])->group(function(){
 });
 
 Route::middleware(['auth:sanctum','account.active','role:customer'])->prefix('customer')->group(function(){
-    Route::get('/invoices',[InvoicePaymentController::class,'index']);Route::get('/invoices/{invoice}',[InvoicePaymentController::class,'show']);Route::post('/invoices/{invoice}/payment-proof',[InvoicePaymentController::class,'uploadProof']);Route::post('/invoices/{invoice}/refund',[InvoicePaymentController::class,'requestRefund']);Route::post('/refunds/{refund}/confirm',[InvoicePaymentController::class,'confirmRefund']);Route::post('/refunds/{refund}/dispute',[InvoicePaymentController::class,'disputeRefund']);
+    Route::get('/invoices',[InvoicePaymentController::class,'index']);Route::get('/invoices/{invoice}',[InvoicePaymentController::class,'show']);Route::post('/invoices/{invoice}/payment-proof',[InvoicePaymentController::class,'uploadProof']);
 });
 Route::middleware(['auth:sanctum','account.active','role:owner,provider'])->group(function(){
     Route::get('/business/payment-methods',[PayoutAccountController::class,'methods']);Route::get('/business/payout-accounts',[PayoutAccountController::class,'index']);Route::post('/business/payout-accounts',[PayoutAccountController::class,'store']);Route::put('/business/payout-accounts/{payoutAccount}',[PayoutAccountController::class,'update']);Route::delete('/business/payout-accounts/{payoutAccount}',[PayoutAccountController::class,'destroy']);
-    Route::get('/business/payments',[PaymentReviewController::class,'index']);Route::post('/business/payments/{payment}/approve',[PaymentReviewController::class,'approve']);Route::post('/business/payments/{payment}/reject',[PaymentReviewController::class,'reject']);Route::get('/business/refunds',[PaymentReviewController::class,'refunds']);Route::post('/business/refunds/{refund}/proof',[PaymentReviewController::class,'uploadRefundProof']);
+    Route::get('/business/payments',[PaymentReviewController::class,'index']);Route::post('/business/payments/{payment}/approve',[PaymentReviewController::class,'approve']);Route::post('/business/payments/{payment}/reject',[PaymentReviewController::class,'reject']);Route::get('/business/refunds',[PaymentReviewController::class,'refunds']);
 });
 Route::middleware(['auth:sanctum','account.active','role:admin'])->prefix('admin')->group(function(){
     Route::get('/payment-methods',[PaymentMethodController::class,'index']);Route::post('/payment-methods/{paymentMethod}',[PaymentMethodController::class,'update']);Route::post('/payment-methods/{paymentMethod}/toggle',[PaymentMethodController::class,'toggle']);Route::get('/payment-refunds',[AdminPaymentController::class,'refunds']);

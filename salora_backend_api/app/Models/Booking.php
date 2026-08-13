@@ -29,6 +29,8 @@ class Booking extends Model
         'total_syp' => 'decimal:2', 'total_usd' => 'decimal:2',
     ];
 
+    protected $hidden = ['expires_at', 'hold_expires_at'];
+
     protected $appends = ['booking_status_label', 'payment_status_label'];
 
     protected static function booted(): void

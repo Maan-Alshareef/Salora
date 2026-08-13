@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -85,6 +86,11 @@ class SaloraBookingV2Api {
       request.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
 
       final token = await tokenProvider?.call();
+
+      debugPrint(
+        'SALORA API REQUEST => $method $uri | '
+        'token=${token != null && token.trim().isNotEmpty ? 'present' : 'missing'}',
+      );
       if (token != null && token.trim().isNotEmpty) {
         request.headers.set(
           HttpHeaders.authorizationHeader,
@@ -97,6 +103,10 @@ class SaloraBookingV2Api {
       }
 
       final response = await request.close();
+
+      debugPrint(
+        'SALORA API RESPONSE => $method $uri | status=${response.statusCode}',
+      );
       final text = await utf8.decodeStream(response);
 
       Map<String, dynamic> decoded = <String, dynamic>{};
@@ -140,6 +150,10 @@ class SaloraBookingV2Api {
         0,
         requestedUrl: uri.toString(),
       );
+    } catch (error, stackTrace) {
+      debugPrint('SALORA API ERROR => $method $uri | $error');
+      debugPrintStack(label: 'SALORA API STACK', stackTrace: stackTrace);
+      rethrow;
     } finally {
       client.close(force: true);
     }

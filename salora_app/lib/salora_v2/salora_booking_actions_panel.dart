@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../screens/booking/booking_adjustment_payment_screen.dart';
 
 import 'salora_booking_time_picker.dart';
 import 'salora_booking_v2_api.dart';
@@ -9,6 +10,8 @@ class SaloraBookingActionsPanel extends StatefulWidget {
     required this.bookingId,
     required this.venueId,
     required this.eventStartAt,
+    required this.eventEndAt,
+    required this.currentGuestCount,
     required this.api,
     this.onChanged,
   });
@@ -16,6 +19,8 @@ class SaloraBookingActionsPanel extends StatefulWidget {
   final int bookingId;
   final int venueId;
   final DateTime eventStartAt;
+  final DateTime eventEndAt;
+  final int currentGuestCount;
   final SaloraBookingV2Api api;
   final VoidCallback? onChanged;
 
@@ -32,21 +37,18 @@ class _SaloraBookingActionsPanelState extends State<SaloraBookingActionsPanel> {
   bool get _localCanEdit =>
       widget.eventStartAt.difference(DateTime.now()).inHours > 120;
 
-  bool get _canEdit =>
-      _actionState?['can_edit'] == true ||
-      (_actionState == null && _localCanEdit);
-
-  String get _editMode => _actionState?['edit_mode']?.toString() ?? 'request';
-
-  bool get _isDirectEdit => _editMode == 'direct';
+  bool get _canEdit => _actionState?['can_edit'] == true;
 
   String get _editMessage {
     final serverMessage = _actionState?['edit_message']?.toString().trim();
     if (serverMessage != null && serverMessage.isNotEmpty) {
       return serverMessage;
     }
+    if (_actionState == null) {
+      return 'تعذر التحقق من حالة تعديل الحجز من الخادم. أعد تحميل الحالة قبل المتابعة.';
+    }
     return _localCanEdit
-        ? 'يمكن تعديل الموعد. سيعيد النظام فحص التوفر والسعر قبل الحفظ.'
+        ? 'يمكن إرسال طلب تعديل للتاريخ والوقت وعدد الضيوف، ويُطبق فقط بعد موافقة مالك الصالة.'
         : 'لا يمكن تعديل الحجز خلال آخر 120 ساعة قبل الموعد.';
   }
 
@@ -57,6 +59,11 @@ class _SaloraBookingActionsPanelState extends State<SaloraBookingActionsPanel> {
 
   String? get _cancellationStatus =>
       _actionState?['cancellation_status']?.toString();
+
+  Map<String, dynamic>? get _paymentAdjustment {
+    final value = _actionState?['payment_adjustment'];
+    return value is Map ? Map<String, dynamic>.from(value) : null;
+  }
 
   @override
   void initState() {
@@ -101,7 +108,8 @@ class _SaloraBookingActionsPanelState extends State<SaloraBookingActionsPanel> {
     final hasPendingChange = _pendingChange != null;
     final cancellationClosed =
         _cancellationStatus == 'waiting_refund' ||
-        _cancellationStatus == 'cancelled';
+            _cancellationStatus == 'cancelled';
+    final paymentAdjustment = _paymentAdjustment;
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -164,6 +172,46 @@ class _SaloraBookingActionsPanelState extends State<SaloraBookingActionsPanel> {
             ),
             const SizedBox(height: 8),
           ],
+          if (paymentAdjustment != null &&
+              ['pending_payment', 'proof_uploaded', 'pending_refund', 'pending']
+                  .contains(paymentAdjustment['status']?.toString())) ...[
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  children: [
+                    const Icon(Icons.account_balance_wallet_outlined),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        paymentAdjustment['type'] == 'additional_payment'
+                            ? 'بعد التعديل يوجد فرق دفع مطلوب: ${_money(paymentAdjustment['amount_syp'])} ل.س.'
+                            : 'بعد التعديل يوجد مبلغ مستحق لك: ${_money(paymentAdjustment['amount_syp'])} ل.س.',
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (paymentAdjustment['type'] == 'additional_payment' &&
+                paymentAdjustment['status'] == 'pending_payment') ...[
+              FilledButton.icon(
+                onPressed: () => _payAdjustment(paymentAdjustment),
+                icon: const Icon(Icons.payments_outlined),
+                label: const Text('دفع فرق التعديل ورفع الإثبات'),
+              ),
+              const SizedBox(height: 8),
+            ],
+            if (paymentAdjustment['type'] == 'additional_payment' &&
+                paymentAdjustment['status'] == 'proof_uploaded') ...[
+              const Text(
+                'تم رفع إثبات فرق الدفع وهو بانتظار مراجعة مالك الصالة.',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ],
           Wrap(
             spacing: 10,
             runSpacing: 10,
@@ -178,9 +226,7 @@ class _SaloraBookingActionsPanelState extends State<SaloraBookingActionsPanel> {
                       ? 'طلب تعديل قيد المراجعة'
                       : !_canEdit
                       ? 'التعديل غير متاح'
-                      : _isDirectEdit
-                      ? 'تعديل الحجز'
-                      : 'طلب تعديل الحجز',
+                      : 'تعديل الحجز',
                 ),
               ),
               if (!cancellationClosed)
@@ -204,8 +250,9 @@ class _SaloraBookingActionsPanelState extends State<SaloraBookingActionsPanel> {
         venueId: widget.venueId,
         bookingId: widget.bookingId,
         api: widget.api,
-        initialDate: widget.eventStartAt,
-        editMode: _editMode,
+        initialStartAt: widget.eventStartAt,
+        initialEndAt: widget.eventEndAt,
+        currentGuestCount: widget.currentGuestCount,
       ),
     );
 
@@ -214,23 +261,42 @@ class _SaloraBookingActionsPanelState extends State<SaloraBookingActionsPanel> {
     try {
       final response = await widget.api
           .post('/bookings/${widget.bookingId}/change-requests', {
-            'venue_id': widget.venueId,
-            'start_at': result['start_at'],
-            'end_at': result['end_at'],
-            if ((result['reason']?.toString().trim() ?? '').isNotEmpty)
-              'reason': result['reason'].toString().trim(),
-          });
+        'venue_id': widget.venueId,
+        'start_at': result['start_at'],
+        'end_at': result['end_at'],
+        'guests_count': result['guests_count'],
+        if ((result['reason']?.toString().trim() ?? '').isNotEmpty)
+          'reason': result['reason'].toString().trim(),
+      });
       if (!mounted) return;
       _message(
         response['message']?.toString() ??
-            (_isDirectEdit
-                ? 'تم تعديل الحجز وإعادة حساب السعر والتوفر.'
-                : 'تم إرسال طلب التعديل إلى مالك الصالة.'),
+            'تم إرسال طلب التعديل إلى مالك الصالة.',
       );
       await _loadActionState();
       widget.onChanged?.call();
     } catch (error) {
       if (mounted) _message(error.toString());
+    }
+  }
+
+  Future<void> _payAdjustment(Map<String, dynamic> adjustment) async {
+    final id = int.tryParse(adjustment['id']?.toString() ?? '');
+    final amount = double.tryParse(adjustment['amount_syp']?.toString() ?? '') ?? 0;
+    if (id == null) return;
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BookingAdjustmentPaymentScreen(
+          bookingId: widget.bookingId,
+          adjustmentId: id,
+          amountSyp: amount,
+        ),
+      ),
+    );
+    if (changed == true && mounted) {
+      await _loadActionState();
+      widget.onChanged?.call();
     }
   }
 
@@ -286,9 +352,9 @@ class _SaloraBookingActionsPanelState extends State<SaloraBookingActionsPanel> {
 
       final response = await widget.api
           .post('/bookings/${widget.bookingId}/cancel', {
-            'accepted_policy': true,
-            if (reason.text.trim().isNotEmpty) 'reason': reason.text.trim(),
-          });
+        'accepted_policy': true,
+        if (reason.text.trim().isNotEmpty) 'reason': reason.text.trim(),
+      });
       if (!mounted) return;
       final status = response['status'] == 'waiting_refund'
           ? 'تم الإلغاء وهو الآن بانتظار تأكيد استرداد المبلغ.'
@@ -309,6 +375,14 @@ class _SaloraBookingActionsPanelState extends State<SaloraBookingActionsPanel> {
       ..showSnackBar(SnackBar(content: Text(text)));
   }
 
+  static String _money(dynamic value) {
+    final number = (value as num?)?.round() ?? int.tryParse(value?.toString() ?? '') ?? 0;
+    return number.toString().replaceAllMapped(
+      RegExp(r'\B(?=(\d{3})+(?!\d))'),
+          (_) => ',',
+    );
+  }
+
   static Widget _line(String label, dynamic value) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 3),
     child: Row(
@@ -322,15 +396,17 @@ class _BookingChangeDialog extends StatefulWidget {
     required this.venueId,
     required this.bookingId,
     required this.api,
-    required this.initialDate,
-    required this.editMode,
+    required this.initialStartAt,
+    required this.initialEndAt,
+    required this.currentGuestCount,
   });
 
   final int venueId;
   final int bookingId;
   final SaloraBookingV2Api api;
-  final DateTime initialDate;
-  final String editMode;
+  final DateTime initialStartAt;
+  final DateTime initialEndAt;
+  final int currentGuestCount;
 
   @override
   State<_BookingChangeDialog> createState() => _BookingChangeDialogState();
@@ -338,11 +414,22 @@ class _BookingChangeDialog extends StatefulWidget {
 
 class _BookingChangeDialogState extends State<_BookingChangeDialog> {
   final TextEditingController _reason = TextEditingController();
+  late final TextEditingController _guests;
   Map<String, dynamic>? _quote;
+
+  @override
+  void initState() {
+    super.initState();
+    _guests = TextEditingController(
+      text: (widget.currentGuestCount < 1 ? 1 : widget.currentGuestCount)
+          .toString(),
+    );
+  }
 
   @override
   void dispose() {
     _reason.dispose();
+    _guests.dispose();
     super.dispose();
   }
 
@@ -364,9 +451,9 @@ class _BookingChangeDialogState extends State<_BookingChangeDialog> {
       minimumStartAt.month,
       minimumStartAt.day,
     );
-    final initialDate = widget.initialDate.isBefore(firstDate)
+    final initialDate = widget.initialStartAt.isBefore(firstDate)
         ? firstDate
-        : widget.initialDate;
+        : widget.initialStartAt;
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
@@ -381,11 +468,9 @@ class _BookingChangeDialogState extends State<_BookingChangeDialog> {
                   const Icon(Icons.edit_calendar),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      widget.editMode == 'direct'
-                          ? 'تعديل موعد الحجز'
-                          : 'طلب تعديل موعد الحجز',
-                      style: const TextStyle(
+                    child: const Text(
+                      'تعديل الصالة',
+                      style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w900,
                       ),
@@ -410,12 +495,23 @@ class _BookingChangeDialogState extends State<_BookingChangeDialog> {
                       venueId: widget.venueId,
                       api: widget.api,
                       initialDate: initialDate,
+                      initialStartAt: widget.initialStartAt,
+                      initialEndAt: widget.initialEndAt,
                       firstDate: firstDate,
                       minimumStartAt: minimumStartAt,
                       excludeBookingId: widget.bookingId,
                       onQuoteChanged: (quote) {
                         if (mounted) setState(() => _quote = quote);
                       },
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _guests,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'عدد الضيوف',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                     const SizedBox(height: 12),
                     TextField(
@@ -442,11 +538,7 @@ class _BookingChangeDialogState extends State<_BookingChangeDialog> {
                   FilledButton.icon(
                     onPressed: _quote == null ? null : _submit,
                     icon: const Icon(Icons.send),
-                    label: Text(
-                      widget.editMode == 'direct'
-                          ? 'حفظ التعديل'
-                          : 'إرسال طلب التعديل',
-                    ),
+                    label: const Text('إرسال طلب التعديل'),
                   ),
                 ],
               ),
@@ -461,28 +553,70 @@ class _BookingChangeDialogState extends State<_BookingChangeDialog> {
     final quote = _quote;
     if (quote == null) return;
 
-    // Use the exact timestamps returned by the server quote. Rebuilding the
-    // time locally can shift the selected hour when the device and Laravel
-    // use different time-zone offsets, especially for overnight bookings.
-    final quotedStart = quote['start_at']?.toString().trim();
-    final quotedEnd = quote['end_at']?.toString().trim();
-    if (quotedStart == null ||
-        quotedStart.isEmpty ||
-        quotedEnd == null ||
-        quotedEnd.isEmpty ||
-        DateTime.tryParse(quotedStart) == null ||
-        DateTime.tryParse(quotedEnd) == null) {
+    final guests = int.tryParse(_guests.text.trim());
+    if (guests == null || guests < 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('أدخل عدداً صحيحاً للضيوف.')),
+      );
+      return;
+    }
+
+    DateTime? startAt = DateTime.tryParse(quote['start_at']?.toString() ?? '');
+    DateTime? endAt = DateTime.tryParse(quote['end_at']?.toString() ?? '');
+
+    // استخدم التاريخ والوقت اللذين تحقّق منهما الخادم نفسه.
+    // أبقِ إعادة التركيب القديمة فقط كحل توافق احتياطي.
+    if (startAt == null || endAt == null) {
+      final selectedDate = DateTime.tryParse(
+        quote['selected_date']?.toString() ?? '',
+      );
+      final startParts = _clockParts(quote['selected_start']);
+      final endParts = _clockParts(quote['selected_end']);
+
+      if (selectedDate != null && startParts != null && endParts != null) {
+        startAt = DateTime(
+          selectedDate.year,
+          selectedDate.month,
+          selectedDate.day,
+          startParts[0],
+          startParts[1],
+        );
+        endAt = DateTime(
+          selectedDate.year,
+          selectedDate.month,
+          selectedDate.day,
+          endParts[0],
+          endParts[1],
+        );
+
+        if (!endAt.isAfter(startAt)) {
+          endAt = endAt.add(const Duration(days: 1));
+        }
+      }
+    }
+
+    if (startAt == null || endAt == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('تعذر قراءة الموعد المحسوب من الخادم. أعد اختياره.'),
+          content: Text('تعذر قراءة الموعد المختار. أعد اختياره.'),
+        ),
+      );
+      return;
+    }
+
+    if (!endAt.isAfter(startAt)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('وقت النهاية يجب أن يكون بعد وقت البداية.'),
         ),
       );
       return;
     }
 
     Navigator.pop(context, <String, dynamic>{
-      'start_at': quotedStart,
-      'end_at': quotedEnd,
+      'start_at': startAt.toIso8601String(),
+      'end_at': endAt.toIso8601String(),
+      'guests_count': guests,
       'reason': _reason.text.trim(),
     });
   }

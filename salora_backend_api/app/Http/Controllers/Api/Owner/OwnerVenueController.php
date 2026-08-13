@@ -94,6 +94,57 @@ class OwnerVenueController extends BaseApiController
                 return $this->fail('يوجد تعديل آخر للصالة بانتظار مراجعة الأدمن.', 422, ['code' => 'venue_revision_pending']);
             }
 
+            // The owner form sends a convenient full snapshot. Persist only values
+            // that are actually different from the published venue so the admin
+            // revision page shows the real change count instead of 20+ unchanged
+            // fields. This also prevents no-op revisions.
+            $payload = $this->onlyChangedVenuePayload($venue, $payload);
+
+            // price_usd/price_syp may be derived from the exchange rate. Do not
+            // report a derived counterpart as a user edit when the explicitly sent
+            // price itself did not change.
+            if (array_key_exists('price_syp', $data) && !array_key_exists('price_syp', $payload) && !array_key_exists('price_usd', $data)) {
+                unset($payload['price_usd']);
+            }
+            if (array_key_exists('price_usd', $data) && !array_key_exists('price_usd', $payload) && !array_key_exists('price_syp', $data)) {
+                unset($payload['price_syp']);
+            }
+
+            if ($eventTypeIds !== null && $this->sameIntegerSet(
+                $venue->eventTypes()->pluck('event_types.id')->all(),
+                $eventTypeIds,
+            )) {
+                $eventTypeIds = null;
+            }
+            if ($serviceIds !== null && $this->sameIntegerSet(
+                $venue->services()->pluck('services.id')->all(),
+                $serviceIds,
+            )) {
+                $serviceIds = null;
+            }
+            if ($replaceImages && $this->sameStringList(
+                $venue->images()->orderByDesc('is_main')->orderBy('sort_order')->pluck('image_url')->all(),
+                $imageUrls ?? [],
+            )) {
+                $replaceImages = false;
+                $imageUrls = null;
+            }
+            if ($replaceVideos && $this->sameStringList(
+                $venue->videos()->orderBy('sort_order')->pluck('video_url')->all(),
+                $videoUrls ?? [],
+            )) {
+                $replaceVideos = false;
+                $videoUrls = null;
+            }
+
+            if ($payload === [] && $eventTypeIds === null && $serviceIds === null && ! $replaceImages && ! $replaceVideos) {
+                return $this->ok([
+                    'venue' => $venue->load(['images', 'videos', 'eventTypes', 'services.images']),
+                    'revision' => null,
+                    'no_changes' => true,
+                ], 'لا توجد تغييرات جديدة لإرسالها للمراجعة.');
+            }
+
             $revision = VenueRevision::create([
                 'venue_id' => $venue->id,
                 'owner_id' => $request->user()->id,
@@ -423,6 +474,75 @@ class OwnerVenueController extends BaseApiController
         return $data;
     }
 
+    private function onlyChangedVenuePayload(Venue $venue, array $payload): array
+    {
+        $changed = [];
+        foreach ($payload as $field => $value) {
+            if (! $this->venueValuesEqual($field, $venue->{$field} ?? null, $value)) {
+                $changed[$field] = $value;
+            }
+        }
+        return $changed;
+    }
+
+    private function venueValuesEqual(string $field, mixed $current, mixed $proposed): bool
+    {
+        if (in_array($field, ['latitude', 'longitude', 'price_syp', 'price_usd'], true)) {
+            if (($current === null || $current === '') && ($proposed === null || $proposed === '')) return true;
+            return abs((float) $current - (float) $proposed) <= 0.000001;
+        }
+        if ($field === 'capacity') {
+            return (int) $current === (int) $proposed;
+        }
+        if (in_array($field, ['amenities', 'policies', 'vendor_categories'], true)) {
+            return $this->sameStringSet((array) $current, (array) $proposed);
+        }
+        if ($field === 'opening_hours') {
+            return $this->canonicalArray((array) $current) === $this->canonicalArray((array) $proposed);
+        }
+
+        $left = trim((string) ($current ?? ''));
+        $right = trim((string) ($proposed ?? ''));
+        return $left === $right;
+    }
+
+    private function sameIntegerSet(array $left, array $right): bool
+    {
+        $normalize = fn (array $values) => collect($values)->map(fn ($value) => (int) $value)->filter()->unique()->sort()->values()->all();
+        return $normalize($left) === $normalize($right);
+    }
+
+    private function sameStringSet(array $left, array $right): bool
+    {
+        $normalize = fn (array $values) => collect($values)
+            ->map(fn ($value) => trim((string) $value))
+            ->filter(fn ($value) => $value !== '')
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+        return $normalize($left) === $normalize($right);
+    }
+
+    private function sameStringList(array $left, array $right): bool
+    {
+        $normalize = fn (array $values) => collect($values)
+            ->map(fn ($value) => trim((string) $value))
+            ->filter(fn ($value) => $value !== '')
+            ->values()
+            ->all();
+        return $normalize($left) === $normalize($right);
+    }
+
+    private function canonicalArray(array $value): array
+    {
+        foreach ($value as $key => $item) {
+            if (is_array($item)) $value[$key] = $this->canonicalArray($item);
+        }
+        if (! array_is_list($value)) ksort($value);
+        return $value;
+    }
+
     private function venuePayload(array $data, bool $partial = false): array
     {
         $payload = collect($data)->only([
@@ -435,6 +555,10 @@ class OwnerVenueController extends BaseApiController
             $payload['name_ar'] = $payload['name_ar'] ?? $payload['name_en'];
             $payload['description_ar'] = $payload['description_ar'] ?? ($payload['description_en'] ?? '');
             $payload['description_en'] = $payload['description_en'] ?? ($payload['description_ar'] ?? '');
+        } else {
+            // Working hours have their own immediate owner endpoint/page and must
+            // never be accidentally reset by the general venue edit snapshot.
+            unset($payload['opening_hours']);
         }
 
         if (isset($payload['latitude'], $payload['longitude']) && empty($payload['map_url'])) {

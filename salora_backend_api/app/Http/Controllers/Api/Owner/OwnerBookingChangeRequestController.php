@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Api\Owner;
 
 use App\Http\Controllers\Api\BaseApiController;
+use App\Http\Controllers\Api\SaloraBookingV2Controller;
 use App\Models\Booking;
 use App\Models\BookingChangeRequest;
+use App\Services\BookingModificationService;
 use App\Services\BookingWorkflowService;
 use App\Services\NotificationService;
 use App\Services\SaloraBookingV2Service;
@@ -18,6 +20,7 @@ class OwnerBookingChangeRequestController extends BaseApiController
     {
         return $this->ok(BookingChangeRequest::with(['booking.venue', 'customer:id,name,email,phone'])
             ->whereHas('booking', fn($q) => $q->where('owner_id', $request->user()->id))
+            ->where('type', 'modification')
             ->latest()
             ->get());
     }
@@ -30,70 +33,36 @@ class OwnerBookingChangeRequestController extends BaseApiController
     )
     {
         $booking = $changeRequest->booking;
-        abort_unless($booking && (int)$booking->owner_id === (int)$request->user()->id, 403);
-        if ($changeRequest->status !== 'pending') return $this->fail('This request has already been reviewed.', 422);
+        abort_unless($booking && (int) $booking->owner_id === (int) $request->user()->id, 403);
+        if ($changeRequest->type !== 'modification') {
+            return $this->fail('لم يعد إلغاء العميل يحتاج موافقة المالك. هذا طلب قديم وتم إيقاف هذا المسار.', 422);
+        }
+        if ($changeRequest->status !== 'pending') {
+            return $this->fail('This request has already been reviewed.', 422);
+        }
 
         $data = $request->validate([
             'decision' => 'required|in:approve,reject',
             'reason' => 'required_if:decision,reject|nullable|string|max:1000',
         ]);
 
-        $result = DB::transaction(function () use ($request, $booking, $changeRequest, $data, $workflow, $bookingV2) {
-            $lockedBooking = Booking::whereKey($booking->id)->lockForUpdate()->firstOrFail();
-            $lockedRequest = BookingChangeRequest::whereKey($changeRequest->id)->lockForUpdate()->firstOrFail();
-            if ($lockedRequest->status !== 'pending') abort(422, 'This request has already been reviewed.');
-
-            if ($data['decision'] === 'approve') {
-                if ($lockedRequest->type === 'modification') {
-                    $changes = $lockedRequest->requested_changes ?? [];
-                    if (is_string($changes)) {
-                        $changes = json_decode($changes, true) ?: [];
-                    }
-                    $bookingV2->applyApprovedChange(
-                        (int) $lockedBooking->id,
-                        is_array($changes) ? $changes : [],
-                        (int) $request->user()->id
-                    );
-                    $workflow->transition(
-                        $lockedBooking,
-                        SaloraStatus::BOOKING_CONFIRMED,
-                        $request->user(),
-                        'Modification request approved.'
-                    );
-                } else {
-                    $workflow->transition($lockedBooking, SaloraStatus::BOOKING_CANCELLED, $request->user(), 'Cancellation request approved.');
-                    $lockedBooking->providerRequests()->whereIn('status', ['pending', 'accepted'])->update(['status' => 'cancelled']);
-                    $lockedBooking->invoice?->update(['status' => 'cancelled']);
-                }
-                $lockedRequest->update([
-                    'status' => 'approved',
-                    'reviewed_by' => $request->user()->id,
-                    'decision_reason' => $data['reason'] ?? null,
-                    'decided_at' => now(),
-                ]);
-            } else {
-                $workflow->transition($lockedBooking, SaloraStatus::BOOKING_CONFIRMED, $request->user(), $data['reason']);
-                $lockedRequest->update([
-                    'status' => 'rejected',
-                    'reviewed_by' => $request->user()->id,
-                    'decision_reason' => $data['reason'],
-                    'decided_at' => now(),
-                ]);
-            }
-
-            NotificationService::send(
-                $lockedBooking->customer_id,
-                'تمت مراجعة طلب الحجز',
-                $data['decision'] === 'approve' ? 'تم قبول طلبك.' : 'تم رفض طلبك: '.$data['reason'],
-                'booking_change_decision',
-                ['booking_id' => $lockedBooking->id, 'request_id' => $lockedRequest->id]
+        $controller = app(SaloraBookingV2Controller::class);
+        if ($data['decision'] === 'approve') {
+            return $controller->approveChange(
+                $request,
+                (int) $booking->id,
+                (int) $changeRequest->id,
+                $bookingV2,
+                app(BookingModificationService::class),
             );
+        }
 
-            return $lockedRequest->fresh(['booking.venue', 'customer:id,name,email,phone']);
-        });
-
-        if ($result instanceof \Illuminate\Http\JsonResponse) return $result;
-        return $this->ok($result, 'Request reviewed.');
+        return $controller->rejectChange(
+            $request,
+            (int) $booking->id,
+            (int) $changeRequest->id,
+            $bookingV2,
+        );
     }
 
 }

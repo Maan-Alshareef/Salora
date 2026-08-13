@@ -3,19 +3,16 @@ class VenueUnavailableInterval {
     required this.startTime,
     required this.endTime,
     required this.status,
-    this.expiresAt,
   });
 
   final String startTime;
   final String endTime;
   final String status;
-  final DateTime? expiresAt;
 
   factory VenueUnavailableInterval.fromJson(Map<String, dynamic> json) => VenueUnavailableInterval(
         startTime: _shortTime(json['start_time']),
         endTime: _shortTime(json['end_time']),
         status: (json['status'] ?? '').toString(),
-        expiresAt: DateTime.tryParse((json['expires_at'] ?? '').toString()),
       );
 
   bool overlaps(String start, String end) {
@@ -31,7 +28,6 @@ class VenueDayAvailability {
     required this.openTime,
     required this.closeTime,
     required this.unavailableIntervals,
-    required this.holdHours,
   });
 
   final String venueId;
@@ -40,7 +36,6 @@ class VenueDayAvailability {
   final String openTime;
   final String closeTime;
   final List<VenueUnavailableInterval> unavailableIntervals;
-  final int holdHours;
 
   factory VenueDayAvailability.fromJson(Map<String, dynamic> json) {
     final opening = json['opening_hours'] is Map
@@ -57,7 +52,6 @@ class VenueDayAvailability {
       openTime: _shortTime(opening['open']),
       closeTime: _shortTime(opening['close']),
       unavailableIntervals: intervals,
-      holdHours: int.tryParse((json['hold_hours'] ?? 24).toString()) ?? 24,
     );
   }
 

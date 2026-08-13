@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
 class ResolveBookingConflicts extends Command
 {
     protected $signature = 'salora:resolve-booking-conflicts
-        {--apply-safe : Expire only conflicting unpaid temporary/pending bookings}
+        {--apply-safe : Cancel only conflicting unpaid temporary/pending bookings}
         {--all-dates : Include past dates in the report}';
 
     protected $description = 'Find overlapping venue bookings and safely release duplicate unpaid temporary holds.';
@@ -75,14 +75,14 @@ class ResolveBookingConflicts extends Command
                     $winner->booking_status.' '.$this->timeRange($winner),
                     $loser->booking_number ?: '#'.$loser->id,
                     $loser->booking_status.' '.$this->timeRange($loser),
-                    $this->canExpireSafely($loser) ? 'expire unpaid hold' : 'manual review required',
+                    $this->canExpireSafely($loser) ? 'cancel unpaid duplicate' : 'manual review required',
                 ];
             })->all()
         );
 
         if (! $this->option('apply-safe')) {
             $this->newLine();
-            $this->line('Dry run only. Run with --apply-safe to expire conflicting unpaid temporary bookings.');
+            $this->line('Dry run only. Run with --apply-safe to cancel conflicting unpaid duplicate bookings.');
             return self::SUCCESS;
         }
 
@@ -105,7 +105,7 @@ class ResolveBookingConflicts extends Command
 
                 $from = $locked->booking_status;
                 $locked->update([
-                    'booking_status' => SaloraStatus::BOOKING_EXPIRED,
+                    'booking_status' => SaloraStatus::BOOKING_CANCELLED,
                     'expires_at' => null,
                     'rejection_reason' => 'تم تحرير الموعد تلقائياً لأن الحجز يتعارض مع حجز أقدم أو مؤكد.',
                     'commission_status' => 'not_due',
@@ -116,7 +116,7 @@ class ResolveBookingConflicts extends Command
                 BookingStatusHistory::create([
                     'booking_id' => $locked->id,
                     'from_status' => $from,
-                    'to_status' => SaloraStatus::BOOKING_EXPIRED,
+                    'to_status' => SaloraStatus::BOOKING_CANCELLED,
                     'changed_by' => null,
                     'reason' => 'Safe conflict cleanup; kept booking '.($winner->booking_number ?: '#'.$winner->id).'.',
                 ]);
@@ -124,7 +124,7 @@ class ResolveBookingConflicts extends Command
             $expired++;
         }
 
-        $this->info("Safely expired {$expired} conflicting unpaid booking(s).");
+        $this->info("Safely cancelled {$expired} conflicting unpaid booking(s).");
         if ($manual > 0) {
             $this->warn("{$manual} conflict(s) contain payment proof/confirmed data and were not changed. Review them manually in the dashboard.");
         }

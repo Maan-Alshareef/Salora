@@ -14,11 +14,26 @@ class SaloraBookingV2ServiceProvider extends ServiceProvider
         $this->app->singleton(SaloraBookingV2Service::class);
     }
 
-    public function boot(SaloraBookingV2Service $service): void
+        public function boot(SaloraBookingV2Service $service): void
     {
+        Event::listen('eloquent.created: *', function (string $eventName, array $data) use ($service) {
+            $model = $data[0] ?? null;
+            if (! $model instanceof Model || ! $model->getKey()) {
+                return;
+            }
+
+            try {
+                if ($model->getTable() === $service->venueTable()) {
+                    $service->ensureDefaultWorkingHours((int) $model->getKey());
+                }
+            } catch (\Throwable $error) {
+                report($error);
+            }
+        });
+
         Event::listen('eloquent.saving: *', function (string $eventName, array $data) use ($service) {
             $model = $data[0] ?? null;
-            if (!$model instanceof Model) {
+            if (! $model instanceof Model) {
                 return;
             }
             try {
@@ -34,7 +49,7 @@ class SaloraBookingV2ServiceProvider extends ServiceProvider
 
         Event::listen('eloquent.saved: *', function (string $eventName, array $data) use ($service) {
             $model = $data[0] ?? null;
-            if (!$model instanceof Model || !$model->getKey()) {
+            if (! $model instanceof Model || ! $model->getKey()) {
                 return;
             }
             try {

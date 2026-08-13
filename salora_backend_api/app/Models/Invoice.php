@@ -59,6 +59,15 @@ class Invoice extends Model
         'accepted_at' => 'datetime',
     ];
 
+    protected $hidden = [
+        'due_at',
+        'payment_deadline_at',
+        'payment_reminder_sent_at',
+        'review_deadline_at',
+        'review_reminder_sent_at',
+        'review_overdue_notified_at',
+    ];
+
     protected $appends = ['verification_url'];
 
     public function getVerificationUrlAttribute(): ?string

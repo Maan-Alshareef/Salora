@@ -172,7 +172,7 @@ export default function AdminCommissions() {
             <tbody className="divide-y divide-white/5">
               {items.map((item) => (
                 <tr key={item.id} className="align-top hover:bg-white/[.025]">
-                  <td className="px-4 py-4"><div className="font-black text-white">{item.source_reference || `#${item.id}`}</div><div className="mt-1 text-xs text-slate-400">{item.source_title || sourceLabel(item.source_type)}</div><div className="mt-1 text-[11px] text-slate-500">{dateTime(item.approved_at)}</div></td>
+                  <td className="px-4 py-4"><div className="font-black text-white">{item.source_reference || `#${item.id}`}</div><div className="mt-1 text-xs text-slate-400">{item.source_title || sourceLabel(item.source_type)}</div><div className="mt-1 text-[11px] text-slate-500">اعتماد: {dateTime(item.approved_at)}</div><div className="mt-1 text-[11px] text-blue-300/80">آخر تحديث مالي: {dateTime(item.updated_at)}</div></td>
                   <td className="px-4 py-4"><div className="font-bold">{item.business_user?.name || "حساب محذوف"}</div><div className="mt-1 text-xs text-slate-500">{item.business_role === "owner" ? "مالك صالة" : "مقدم خدمة"}</div></td>
                   <td className="px-4 py-4"><div className="font-bold text-slate-200">{item.customer?.name || "غير محدد"}</div><div className="mt-1 text-xs text-slate-500">{item.booking?.venue?.name_ar || item.booking?.venue?.name_en || ""}</div></td>
                   <td className="px-4 py-4 font-bold text-slate-200">{moneyPair(item.gross_syp, item.gross_usd)}</td>

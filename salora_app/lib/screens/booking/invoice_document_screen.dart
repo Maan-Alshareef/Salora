@@ -272,6 +272,7 @@ class PaymentDocumentCard extends StatelessWidget {
   }
 
   bool get _paid => invoice['status']?.toString() == 'paid';
+  bool get _hasProof => _proof.isNotEmpty && '${_proof['id'] ?? ''}'.isNotEmpty;
   bool get _rejected => _proof['status']?.toString() == 'rejected';
 
   String _value(dynamic value) {
@@ -292,6 +293,7 @@ class PaymentDocumentCard extends StatelessWidget {
 
   String get _statusLabel {
     if (_paid) return 'مدفوع ومقبول';
+    if (!_hasProof) return 'لم يتم رفع إيصال الدفع بعد';
     if (_rejected) return 'إيصال دفع مرفوض — مطلوب إعادة الرفع';
     return 'إيصال دفع مرفوع — بانتظار التحقق';
   }
@@ -315,7 +317,7 @@ class PaymentDocumentCard extends StatelessWidget {
     );
     final verificationUrl = _value(invoice['verification_url']);
     final imageUrl = ApiConfig.resolveAssetUrl(
-      _proof['image_full_url']?.toString(),
+      (_proof['image_full_url'] ?? _proof['image_url'])?.toString(),
     );
     final headers =
         authorizationToken == null || authorizationToken!.trim().isEmpty

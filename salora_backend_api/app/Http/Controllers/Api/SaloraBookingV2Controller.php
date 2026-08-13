@@ -5,6 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Notifications\SaloraBookingV2Notification;
 use App\Services\SaloraBookingV2Service;
+use App\Services\BookingModificationService;
+use App\Services\NotificationService;
+use App\Services\PaymentWorkflowService;
+use App\Services\VenueOfferAnnouncementService;
+use App\Models\VenueOffer;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -51,27 +56,38 @@ class SaloraBookingV2Controller extends Controller
         $date = Carbon::parse($validated['date'])->startOfDay();
         $dayEnd = $date->copy()->addDay();
         $venueRow = $service->venue($venue);
-        $minimum = 120;
+        $minimum = max(120, (int) ($venueRow->minimum_booking_minutes ?? 120));
         $maximum = max($minimum, (int) ($venueRow->maximum_booking_minutes ?? 480));
 
         $hasWeeklyConfiguration = Schema::hasTable('venue_working_hours')
             && DB::table('venue_working_hours')->where('venue_id', $venue)->exists();
         $hasDateException = Schema::hasTable('venue_schedule_exceptions')
             && DB::table('venue_schedule_exceptions')
-                ->where('venue_id', $venue)
-                ->whereDate('exception_date', $date->toDateString())
-                ->exists();
+            ->where('venue_id', $venue)
+            ->whereDate('exception_date', $date->toDateString())
+            ->exists();
         $legacyHours = $venueRow->opening_hours ?? null;
         if (is_string($legacyHours)) {
             $legacyHours = json_decode($legacyHours, true);
         }
         $hasLegacyConfiguration = is_array($legacyHours) && $legacyHours !== [];
+
+        // Existing venues created before Salora V2 may have neither weekly
+        // working-hours rows nor legacy opening_hours. Give only those venues
+        // the same safe defaults used for newly created venues, so the edit
+        // picker does not become permanently empty.
+        if (! $hasWeeklyConfiguration && ! $hasDateException && ! $hasLegacyConfiguration) {
+            $service->ensureDefaultWorkingHours($venue);
+            $hasWeeklyConfiguration = Schema::hasTable('venue_working_hours')
+                && DB::table('venue_working_hours')->where('venue_id', $venue)->exists();
+        }
+
         $configured = $hasWeeklyConfiguration || $hasDateException || $hasLegacyConfiguration;
 
         $windows = $configured
             ? collect($service->workingWindows($venue, $date))
-                ->filter(fn (array $window) => $window['start']->lt($dayEnd) && $window['end']->gt($date))
-                ->values()
+            ->filter(fn(array $window) => $window['start']->lt($dayEnd) && $window['end']->gt($date))
+            ->values()
             : collect();
 
         $isClosed = $configured && $windows->isEmpty();
@@ -93,9 +109,9 @@ class SaloraBookingV2Controller extends Controller
             ? 'مالك الصالة لم يحدد ساعات العمل لهذا اليوم بعد.'
             : ($isClosed
                 ? 'اليوم عطلة والصالة مغلقة. اختر تاريخاً آخر.'
-                : 'ساعات العمل: '.$windowLabels
-                    ->map(fn (array $window) => $window['open'].' - '.$window['close'])
-                    ->implode('، '));
+                : 'ساعات العمل: ' . $windowLabels
+                ->map(fn(array $window) => $window['open'] . ' - ' . $window['close'])
+                ->implode('، '));
 
         $starts = [];
         $ends = [];
@@ -364,8 +380,12 @@ class SaloraBookingV2Controller extends Controller
             'created_at' => now(),
             'updated_at' => now(),
         ]));
+        $offerRow = VenueOffer::with('venue')->find($id);
+        if ($offerRow) {
+            app(VenueOfferAnnouncementService::class)->announce($offerRow);
+        }
         return response()->json([
-            'message' => 'تم نشر العرض مباشرة في التطبيق.',
+            'message' => 'تم نشر العرض مباشرة في التطبيق وإرسال إشعار للعملاء.',
             'offer' => DB::table('venue_offers')->where('id', $id)->first(),
         ], 201);
     }
@@ -382,24 +402,35 @@ class SaloraBookingV2Controller extends Controller
     {
         $service->assertVenueOwner($venue, $request->user());
         $validated = $request->validate(['is_active' => ['required', 'boolean']]);
-        DB::table('venue_offers')->where('id', $offer)->where('venue_id', $venue)->update([
+        $updates = [
             'is_active' => $validated['is_active'],
             'published_at' => $validated['is_active'] ? now() : null,
             'updated_at' => now(),
-        ]);
-        return response()->json(['message' => $validated['is_active'] ? 'تم نشر العرض.' : 'تم إيقاف العرض.']);
+        ];
+        if ($validated['is_active'] && Schema::hasColumn('venue_offers', 'announcement_sent_at')) {
+            $updates['announcement_sent_at'] = null;
+        }
+        DB::table('venue_offers')->where('id', $offer)->where('venue_id', $venue)->update($updates);
+        if ($validated['is_active'] && ($offerRow = VenueOffer::with('venue')->find($offer))) {
+            app(VenueOfferAnnouncementService::class)->announce($offerRow, true);
+        }
+        return response()->json(['message' => $validated['is_active'] ? 'تم نشر العرض وإرسال إشعار للعملاء.' : 'تم إيقاف العرض.']);
     }
 
     public function bookingActionState(Request $request, int $booking, SaloraBookingV2Service $service): JsonResponse
     {
         $row = $service->booking($booking);
         $this->assertBookingParticipant($row, $request, $service);
-        [$start] = $service->extractDateTimes($row);
+        [$start, $end] = $service->extractDateTimes($row);
         $pending = DB::table('booking_change_requests')
             ->where('booking_id', $booking)
             ->where('status', 'pending')
             ->latest('id')
             ->first();
+
+        $paymentAdjustment = $this->latestPaymentAdjustment($booking);
+        $hasPendingAdjustment = $paymentAdjustment !== null
+            && in_array((string) ($paymentAdjustment['status'] ?? ''), ['pending_payment', 'proof_uploaded', 'pending_refund', 'pending'], true);
 
         $status = strtolower((string) ($row->booking_status ?? $row->status ?? ''));
         $paymentStatus = strtolower((string) ($row->payment_status ?? ''));
@@ -408,45 +439,117 @@ class SaloraBookingV2Controller extends Controller
         $underPaymentReview = $status === 'payment_under_review'
             || $paymentStatus === 'proof_uploaded';
         $closedByCancellation = in_array($cancellationStatus, ['waiting_refund', 'cancelled'], true);
-        $directStatuses = [
-            'pending',
-            'pending_payment',
-            'pending_owner_review',
-            'requested',
-            'awaiting_approval',
-            'waiting_approval',
-            'owner_approved',
-        ];
+        $terminalStatus = in_array($status, [
+            'cancelled',
+            'completed',
+            'expired',
+            'owner_rejected',
+            'rejected',
+            'cancellation_requested',
+        ], true);
 
-        $editMode = in_array($status, $directStatuses, true)
-            ? 'direct'
-            : (in_array($status, ['confirmed', 'modification_requested'], true) ? 'request' : 'blocked');
+        // All booking edits are formal requests. There is no direct-edit path.
+        $editMode = $terminalStatus ? 'blocked' : 'request';
         $canEdit = $hoursUntilEvent > 120
             && empty($row->edit_locked_at)
             && ! $closedByCancellation
             && ! $underPaymentReview
-            && $editMode !== 'blocked';
+            && ! $terminalStatus
+            && $pending === null
+            && ! $hasPendingAdjustment;
 
         $editMessage = match (true) {
             $closedByCancellation => 'لا يمكن تعديل الحجز أثناء الإلغاء أو الاسترداد.',
             $underPaymentReview => 'إيصال الدفع قيد المراجعة. انتظر قرار صاحب المبلغ قبل تعديل الحجز.',
             $hoursUntilEvent <= 120 => 'لا يمكن تعديل الحجز خلال آخر 120 ساعة قبل الموعد.',
             $pending !== null => 'يوجد طلب تعديل قيد المراجعة بالفعل.',
-            $editMode === 'direct' => 'يمكن تعديل الحجز مباشرة قبل التأكيد النهائي، وسيعاد حساب السعر والتوفر.',
-            $editMode === 'request' => 'الحجز مؤكد؛ سيُرسل التعديل إلى مالك الصالة للموافقة.',
-            default => 'حالة الحجز الحالية لا تسمح بالتعديل.',
+            $hasPendingAdjustment => 'يوجد فرق دفع أو استرجاع معلق من تعديل سابق ويجب تسويته قبل تعديل جديد.',
+            $terminalStatus => 'حالة الحجز الحالية لا تسمح بالتعديل.',
+            default => 'يمكن اختيار تاريخ ووقت وعدد ضيوف جديد، ثم يُرسل الطلب إلى مالك الصالة للموافقة أو الرفض.',
         };
 
         return response()->json([
             'booking_id' => $booking,
+            'venue_id' => $service->bookingVenueId($row),
+            'start_at' => $start->toIso8601String(),
+            'end_at' => $end->toIso8601String(),
+            'guest_count' => (int) ($row->guests_count ?? $row->guest_count ?? $row->number_of_guests ?? 1),
+            'booking_status' => $status,
+            'payment_status' => $paymentStatus,
             'can_edit' => $canEdit,
             'edit_mode' => $editMode,
             'edit_message' => $editMessage,
             'hours_until_event' => $hoursUntilEvent,
-            'pending_change_request' => $pending,
+            'pending_change_request' => $pending ? $this->changeRequestPayload($pending, $service, $row) : null,
             'cancellation_status' => $row->cancellation_status ?? null,
             'cancellation_preview' => $service->cancellationPreview($booking),
+            'payment_adjustment' => $paymentAdjustment,
         ]);
+    }
+
+    public function ownerChangeRequests(Request $request, SaloraBookingV2Service $service): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user) {
+            abort(401);
+        }
+        $status = strtolower((string) $request->query('status', 'all'));
+        if (!in_array($status, ['all', 'pending', 'awaiting_payment', 'approved', 'rejected'], true)) {
+            abort(422, 'حالة طلب التعديل غير صحيحة.');
+        }
+
+        $query = DB::table('booking_change_requests')->orderByDesc('id');
+        if ($status !== 'all') {
+            $query->where('status', $status);
+        }
+
+        $items = [];
+        foreach ($query->limit(300)->get() as $change) {
+            if (isset($change->type) && $change->type && $change->type !== 'modification') {
+                continue;
+            }
+            try {
+                $bookingRow = $service->booking((int) $change->booking_id);
+                $venue = $service->venue($service->bookingVenueId($bookingRow));
+            } catch (\Throwable) {
+                continue;
+            }
+            if ($service->venueOwnerId($venue) !== (int) $user->id) {
+                continue;
+            }
+            $items[] = $this->changeRequestPayload($change, $service, $bookingRow);
+        }
+
+        return response()->json(['data' => $items]);
+    }
+
+    public function adminChangeRequests(Request $request, SaloraBookingV2Service $service): JsonResponse
+    {
+        $this->assertAdmin($request);
+        $status = strtolower((string) $request->query('status', 'all'));
+        if (!in_array($status, ['all', 'pending', 'awaiting_payment', 'approved', 'rejected'], true)) {
+            abort(422, 'حالة طلب التعديل غير صحيحة.');
+        }
+
+        $query = DB::table('booking_change_requests')->orderByDesc('id');
+        if ($status !== 'all') {
+            $query->where('status', $status);
+        }
+
+        $items = [];
+        foreach ($query->limit(500)->get() as $change) {
+            if (isset($change->type) && $change->type && $change->type !== 'modification') {
+                continue;
+            }
+            try {
+                $bookingRow = $service->booking((int) $change->booking_id);
+            } catch (\Throwable) {
+                continue;
+            }
+            $items[] = $this->changeRequestPayload($change, $service, $bookingRow);
+        }
+
+        return response()->json(['data' => $items]);
     }
 
     public function requestChange(Request $request, int $booking, SaloraBookingV2Service $service): JsonResponse
@@ -454,14 +557,22 @@ class SaloraBookingV2Controller extends Controller
         $row = $service->booking($booking);
         $this->assertClient($row, $request, $service);
         [$eventStart, $oldEnd] = $service->extractDateTimes($row);
+
         if (!empty($row->edit_locked_at) || in_array((string) ($row->cancellation_status ?? ''), ['waiting_refund', 'cancelled'], true)) {
             abort(422, 'لا يمكن تعديل الحجز أثناء الإلغاء أو بعده.');
         }
 
         $bookingStatusForEdit = strtolower((string) ($row->booking_status ?? $row->status ?? ''));
         $paymentStatusForEdit = strtolower((string) ($row->payment_status ?? ''));
+        if (in_array($bookingStatusForEdit, ['cancelled', 'completed', 'expired', 'owner_rejected', 'rejected', 'cancellation_requested'], true)) {
+            abort(422, 'حالة الحجز الحالية لا تسمح بطلب تعديل.');
+        }
         if ($bookingStatusForEdit === 'payment_under_review' || $paymentStatusForEdit === 'proof_uploaded') {
             abort(422, 'إيصال الدفع قيد المراجعة ولا يمكن تعديل المبلغ أو الموعد قبل اتخاذ القرار.');
+        }
+        $activeAdjustment = $this->latestPaymentAdjustment($booking);
+        if ($activeAdjustment && in_array((string) ($activeAdjustment['status'] ?? ''), ['pending_payment', 'proof_uploaded', 'pending_refund', 'pending'], true)) {
+            abort(422, 'يوجد فرق مالي معلق من تعديل سابق. يجب تسويته قبل إرسال تعديل جديد.');
         }
         if (now()->diffInHours($eventStart, false) <= 120) {
             abort(422, 'لا يمكن تعديل الحجز خلال آخر خمسة أيام قبل الموعد.');
@@ -472,10 +583,11 @@ class SaloraBookingV2Controller extends Controller
 
         $validated = $request->validate([
             'venue_id' => ['nullable', 'integer'],
-            'start_at' => ['nullable', 'date'],
-            'end_at' => ['nullable', 'date'],
+            'start_at' => ['required', 'date'],
+            'end_at' => ['required', 'date'],
             'guest_count' => ['nullable', 'integer', 'min:1'],
             'number_of_guests' => ['nullable', 'integer', 'min:1'],
+            'guests_count' => ['required', 'integer', 'min:1'],
             'reason' => ['nullable', 'string', 'max:1000'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
@@ -483,17 +595,19 @@ class SaloraBookingV2Controller extends Controller
         $venueId = isset($validated['venue_id'])
             ? (int) $validated['venue_id']
             : $service->bookingVenueId($row);
-        $newStart = isset($validated['start_at'])
-            ? Carbon::parse($validated['start_at'])->second(0)
-            : $eventStart;
-        $newEnd = isset($validated['end_at'])
-            ? Carbon::parse($validated['end_at'])->second(0)
-            : $oldEnd;
+        if ($venueId !== $service->bookingVenueId($row)) {
+            abort(422, 'تعديل الحجز لا يسمح بنقل الحجز إلى صالة أخرى.');
+        }
 
+        $newStart = Carbon::parse($validated['start_at'])->second(0);
+        $newEnd = Carbon::parse($validated['end_at'])->second(0);
         if (now()->diffInHours($newStart, false) <= 120) {
             abort(422, 'الموعد الجديد يجب أن يكون بعد أكثر من خمسة أيام.');
         }
 
+        $guests = (int) ($validated['guests_count']
+            ?? $validated['guest_count']
+            ?? $validated['number_of_guests']);
         $requested = [
             'venue_id' => $venueId,
             'start_at' => $newStart->toIso8601String(),
@@ -501,40 +615,27 @@ class SaloraBookingV2Controller extends Controller
             'event_date' => $newStart->toDateString(),
             'start_time' => $newStart->format('H:i'),
             'end_time' => $newEnd->format('H:i'),
+            'guests_count' => $guests,
         ];
-        $guests = $validated['guest_count']
-            ?? $validated['number_of_guests']
-            ?? $row->guests_count
-            ?? $row->guest_count
-            ?? $row->number_of_guests
-            ?? null;
-        if ($guests !== null) {
-            $requested['guests_count'] = (int) $guests;
-        }
         if (array_key_exists('notes', $validated)) {
             $requested['notes'] = $validated['notes'];
         }
 
-        $quote = $service->quote($venueId, $newStart, $newEnd, $booking);
-        $venueRow = $service->venue($venueId);
-        if ($guests !== null && isset($venueRow->capacity) && (int) $guests > (int) $venueRow->capacity) {
-            abort(422, 'عدد الضيوف يتجاوز سعة الصالة.');
+        $currentGuests = (int) ($row->guests_count ?? $row->guest_count ?? $row->number_of_guests ?? 0);
+        $sameSchedule = $newStart->equalTo($eventStart) && $newEnd->equalTo($oldEnd);
+        $sameGuests = $guests === $currentGuests;
+        $sameNotes = !array_key_exists('notes', $validated)
+            || trim((string) ($validated['notes'] ?? '')) === trim((string) ($row->notes ?? ''));
+        if ($sameSchedule && $sameGuests && $sameNotes) {
+            abort(422, 'لم يتم تغيير التاريخ أو الوقت أو عدد الضيوف.');
         }
 
-        $bookingStatus = strtolower((string) ($row->booking_status ?? $row->status ?? ''));
-        if (in_array($bookingStatus, ['pending', 'pending_owner_review', 'pending_payment', 'requested', 'awaiting_approval', 'waiting_approval', 'owner_approved'], true)) {
-            $quote = $service->applyApprovedChange($booking, $requested, $request->user()?->id);
-            $this->notifyUser(
-                $service->venueOwnerId($venueRow),
-                'تم تعديل حجز غير مثبت نهائياً',
-                'عدّل العميل تفاصيل الحجز رقم '.$booking.'، وتم تحديث السعر تلقائياً.',
-                ['booking_id' => $booking, 'event' => 'booking_updated_pending']
-            );
-            return response()->json([
-                'message' => 'تم تعديل الحجز مباشرة وإعادة فحص الموعد والسعر لأنه لم يتثبت نهائياً بعد.',
-                'status' => 'updated_directly',
-                'quote' => $quote,
-            ]);
+        // This quote is the commercial promise shown to the customer. It is stored
+        // and frozen if the owner later approves the request.
+        $quote = $service->quote($venueId, $newStart, $newEnd, $booking);
+        $venueRow = $service->venue($venueId);
+        if (isset($venueRow->capacity) && $guests > (int) $venueRow->capacity) {
+            abort(422, 'عدد الضيوف يتجاوز سعة الصالة.');
         }
 
         $table = 'booking_change_requests';
@@ -548,7 +649,7 @@ class SaloraBookingV2Controller extends Controller
             'customer_id' => $service->bookingUserId($row),
             'type' => 'modification',
             'requested_changes' => json_encode($requested, JSON_UNESCAPED_UNICODE),
-            'reason' => $validated['reason'] ?? $validated['notes'] ?? 'طلب تعديل موعد الحجز',
+            'reason' => $validated['reason'] ?? 'طلب تعديل الحجز',
             'requested_by_user_id' => $request->user()?->id,
             'old_data' => json_encode((array) $row, JSON_UNESCAPED_UNICODE),
             'requested_data' => json_encode($requested, JSON_UNESCAPED_UNICODE),
@@ -561,53 +662,227 @@ class SaloraBookingV2Controller extends Controller
         }
 
         $id = DB::table($table)->insertGetId($payload);
+        $change = DB::table($table)->where('id', $id)->first();
         $this->notifyUser(
             $service->venueOwnerId($venueRow),
             'طلب تعديل حجز جديد',
-            'أرسل العميل طلب تعديل للحجز رقم '.$booking.'.',
+            'أرسل العميل طلب تعديل للحجز رقم ' . $booking . '، ويتطلب موافقتك قبل تغيير الموعد.',
             ['booking_id' => $booking, 'change_request_id' => $id, 'event' => 'change_requested']
         );
 
         return response()->json([
-            'message' => 'تم إرسال طلب التعديل إلى مالك الصالة.',
+            'message' => 'تم إرسال طلب التعديل إلى مالك الصالة. يبقى الموعد القديم محجوزاً حتى اتخاذ القرار.',
             'request_id' => $id,
+            'request' => $change ? $this->changeRequestPayload($change, $service, $row) : null,
             'quote' => $quote,
         ], 201);
     }
 
-    public function approveChange(Request $request, int $booking, int $changeRequest, SaloraBookingV2Service $service): JsonResponse
-    {
-        $row = $service->booking($booking);
-        $service->assertVenueOwner($service->bookingVenueId($row), $request->user());
-        [$currentStart] = $service->extractDateTimes($row);
-        if (now()->diffInHours($currentStart, false) <= 120 || !empty($row->edit_locked_at)) {
-            abort(422, 'لم يعد تعديل الحجز مسموحاً خلال آخر خمسة أيام أو أثناء الإلغاء.');
+    public function approveChange(
+        Request $request,
+        int $booking,
+        int $changeRequest,
+        SaloraBookingV2Service $service,
+        BookingModificationService $modifications,
+    ): JsonResponse {
+        $result = DB::transaction(function () use ($request, $booking, $changeRequest, $service, $modifications): array {
+            DB::table($service->bookingTable())->where('id', $booking)->lockForUpdate()->first();
+            $row = $service->booking($booking);
+            $service->assertVenueOwner($service->bookingVenueId($row), $request->user());
+            [$currentStart] = $service->extractDateTimes($row);
+            if (now()->diffInHours($currentStart, false) <= 120 || !empty($row->edit_locked_at)) {
+                abort(422, 'لم يعد تعديل الحجز مسموحاً خلال آخر خمسة أيام أو أثناء عملية معلقة.');
+            }
+
+            $change = DB::table('booking_change_requests')
+                ->where('id', $changeRequest)
+                ->where('booking_id', $booking)
+                ->where('status', 'pending')
+                ->lockForUpdate()
+                ->first();
+            if (!$change) {
+                abort(404, 'طلب التعديل غير موجود أو تمت معالجته.');
+            }
+
+            $requested = $this->decodeChangeRequestData($change);
+            $frozenQuote = $this->decodeJsonColumn($change, 'quote_snapshot');
+
+            // Serialize every approval/new booking decision for the same venue.
+            // Customer booking creation locks this same venue row, so two flows
+            // cannot both reserve the same slot between availability check and hold creation.
+            DB::table('venues')
+                ->where('id', $service->bookingVenueId($row))
+                ->lockForUpdate()
+                ->first();
+
+            $preview = $service->previewApprovedChange($booking, $requested, $frozenQuote);
+            $difference = round((float) ($preview['difference_syp'] ?? 0), 2);
+            $wasPaid = (bool) ($preview['was_paid'] ?? false);
+
+            if ($wasPaid && $difference > 0.01) {
+                $invoice = DB::table('invoices')
+                    ->where('booking_id', $booking)
+                    ->when(Schema::hasColumn('invoices', 'source_type'), fn ($q) => $q->where('source_type', 'venue_booking'))
+                    ->latest('id')
+                    ->first();
+                $usdToSyp = max(1, (float) env('USD_TO_SYP', 14000));
+                $adjustmentId = DB::table('salora_booking_payment_adjustments')->insertGetId([
+                    'booking_id' => $booking,
+                    'change_request_id' => $changeRequest,
+                    'invoice_id' => $invoice->id ?? null,
+                    'type' => 'additional_payment',
+                    'amount_syp' => $difference,
+                    'amount_usd' => round($difference / $usdToSyp, 2),
+                    'old_total_syp' => (float) ($preview['old_invoice_total_syp'] ?? 0),
+                    'new_total_syp' => (float) ($preview['booking_total_syp'] ?? 0),
+                    'paid_syp' => 0,
+                    'status' => 'pending_payment',
+                    'metadata' => json_encode([
+                        'reason' => 'booking_change_owner_approved_waiting_difference',
+                        'quote' => $preview,
+                    ], JSON_UNESCAPED_UNICODE),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+                $modifications->createHold(
+                    $booking,
+                    $changeRequest,
+                    (int) ($preview['venue_id'] ?? $service->bookingVenueId($row)),
+                    (string) $preview['start_at'],
+                    (string) $preview['end_at'],
+                );
+
+                $changeUpdates = ['status' => 'awaiting_payment', 'updated_at' => now()];
+                foreach (['reviewed_by' => $request->user()?->id, 'decided_by_user_id' => $request->user()?->id, 'owner_approved_at' => now()] as $column => $value) {
+                    if (Schema::hasColumn('booking_change_requests', $column)) {
+                        $changeUpdates[$column] = $value;
+                    }
+                }
+                DB::table('booking_change_requests')->where('id', $changeRequest)->update($changeUpdates);
+
+                $bookingUpdates = [];
+                if (Schema::hasColumn($service->bookingTable(), 'edit_locked_at')) {
+                    $bookingUpdates['edit_locked_at'] = now();
+                }
+                if (Schema::hasColumn($service->bookingTable(), 'financial_status')) {
+                    $bookingUpdates['financial_status'] = 'additional_payment_due';
+                }
+                if ($bookingUpdates !== []) {
+                    DB::table($service->bookingTable())->where('id', $booking)->update($bookingUpdates);
+                }
+
+                return [
+                    'mode' => 'awaiting_payment',
+                    'row' => $row,
+                    'quote' => $preview,
+                    'adjustment' => (array) DB::table('salora_booking_payment_adjustments')->where('id', $adjustmentId)->first(),
+                    'change' => DB::table('booking_change_requests')->where('id', $changeRequest)->first(),
+                ];
+            }
+
+            $quote = $service->applyApprovedChange(
+                $booking,
+                $requested,
+                $request->user()?->id,
+                $frozenQuote,
+            );
+            $adjustment = $quote['payment_adjustment'] ?? null;
+            if (is_array($adjustment)) {
+                DB::table('salora_booking_payment_adjustments')->where('id', $adjustment['id'])->update([
+                    'change_request_id' => $changeRequest,
+                    'updated_at' => now(),
+                ]);
+                $adjustment['change_request_id'] = $changeRequest;
+                if (($adjustment['type'] ?? '') === 'refund_due') {
+                    $bookingUpdates = [];
+                    if (Schema::hasColumn($service->bookingTable(), 'edit_locked_at')) {
+                        $bookingUpdates['edit_locked_at'] = now();
+                    }
+                    if ($bookingUpdates !== []) {
+                        DB::table($service->bookingTable())->where('id', $booking)->update($bookingUpdates);
+                    }
+                }
+            }
+
+            $updates = $this->changeDecisionUpdates('approved', $request->user()?->id);
+            if (Schema::hasColumn('booking_change_requests', 'owner_approved_at')) {
+                $updates['owner_approved_at'] = now();
+            }
+            if (Schema::hasColumn('booking_change_requests', 'finalized_at')) {
+                $updates['finalized_at'] = now();
+            }
+            DB::table('booking_change_requests')->where('id', $changeRequest)->update($updates);
+
+            return [
+                'mode' => is_array($adjustment) && ($adjustment['type'] ?? '') === 'refund_due' ? 'refund_due' : 'finalized',
+                'row' => $row,
+                'quote' => $quote,
+                'adjustment' => $adjustment,
+                'change' => DB::table('booking_change_requests')->where('id', $changeRequest)->first(),
+            ];
+        });
+
+        $customerId = $service->bookingUserId($result['row']);
+        if ($result['mode'] === 'awaiting_payment') {
+            $amount = number_format((float) ($result['adjustment']['amount_syp'] ?? 0), 0, '.', ',');
+            $this->notifyUser(
+                $customerId,
+                'تمت الموافقة على تعديل الحجز - مطلوب دفع فرق',
+                'وافق مالك الصالة على التعديل. ادفع فرق السعر '.$amount.' ل.س وارفع الإثبات لإتمام التعديل. الموعد الجديد محفوظ لك دون مهلة زمنية.',
+                [
+                    'booking_id' => $booking,
+                    'change_request_id' => $changeRequest,
+                    'payment_adjustment_id' => $result['adjustment']['id'] ?? null,
+                    'event' => 'booking_change_payment_required',
+                    'target_route' => 'booking_details',
+                ],
+            );
+            return response()->json([
+                'message' => 'تمت الموافقة على الطلب. ينتظر التعديل دفع فرق السعر وقبول إثباته قبل اعتماد الموعد الجديد.',
+                'status' => 'awaiting_payment',
+                'quote' => $result['quote'],
+                'payment_adjustment' => $result['adjustment'],
+                'request' => $this->changeRequestPayload($result['change'], $service),
+            ]);
         }
 
-        $change = DB::table('booking_change_requests')
-            ->where('id', $changeRequest)
-            ->where('booking_id', $booking)
-            ->where('status', 'pending')
-            ->first();
-        if (!$change) {
-            abort(404, 'طلب التعديل غير موجود أو تمت معالجته.');
+        if ($result['mode'] === 'refund_due') {
+            $amount = number_format((float) ($result['adjustment']['amount_syp'] ?? 0), 0, '.', ',');
+            $this->notifyUser(
+                $customerId,
+                'تم اعتماد تعديل الحجز ولديك مبلغ استرجاع',
+                'تم تثبيت الموعد الجديد. لديك مبلغ '.$amount.' ل.س مستحق للاسترجاع من مالك الصالة.',
+                [
+                    'booking_id' => $booking,
+                    'change_request_id' => $changeRequest,
+                    'payment_adjustment_id' => $result['adjustment']['id'] ?? null,
+                    'event' => 'booking_change_refund_due',
+                    'target_route' => 'booking_details',
+                ],
+            );
+        } else {
+            $this->notifyUser(
+                $customerId,
+                'تم اعتماد تعديل الحجز',
+                'وافق مالك الصالة وتم اعتماد الموعد والسعر الجديد للحجز رقم '.$booking.'.',
+                [
+                    'booking_id' => $booking,
+                    'change_request_id' => $changeRequest,
+                    'event' => 'booking_change_finalized',
+                    'target_route' => 'booking_details',
+                ],
+            );
         }
-
-        $requested = $this->decodeChangeRequestData($change);
-        $quote = $service->applyApprovedChange($booking, $requested, $request->user()?->id);
-        DB::table('booking_change_requests')->where('id', $changeRequest)->update(
-            $this->changeDecisionUpdates('approved', $request->user()?->id)
-        );
-        $this->notifyUser(
-            $service->bookingUserId($row),
-            'تم قبول تعديل الحجز',
-            'وافق مالك الصالة على تعديل الحجز رقم '.$booking.' وتم تحديث المبلغ.',
-            ['booking_id' => $booking, 'event' => 'change_approved']
-        );
 
         return response()->json([
-            'message' => 'تم قبول التعديل وتحديث الموعد والسعر والعمولة والأرباح.',
-            'quote' => $quote,
+            'message' => $result['mode'] === 'refund_due'
+                ? 'تم اعتماد التعديل ويوجد مبلغ استرجاع معلق للعميل.'
+                : 'تم قبول التعديل واعتماد الموعد والضيوف والسعر الجديد.',
+            'status' => $result['mode'],
+            'quote' => $result['quote'],
+            'payment_adjustment' => $result['adjustment'],
+            'request' => $this->changeRequestPayload($result['change'], $service),
         ]);
     }
 
@@ -635,11 +910,82 @@ class SaloraBookingV2Controller extends Controller
         $this->notifyUser(
             $service->bookingUserId($row),
             'تم رفض تعديل الحجز',
-            'بقي الحجز رقم '.$booking.' على تفاصيله الأصلية.'.(!empty($validated['reason']) ? ' السبب: '.$validated['reason'] : ''),
+            'بقي الحجز رقم ' . $booking . ' على تفاصيله الأصلية.' . (!empty($validated['reason']) ? ' السبب: ' . $validated['reason'] : ''),
             ['booking_id' => $booking, 'event' => 'change_rejected']
         );
 
         return response()->json(['message' => 'تم رفض التعديل وبقي الحجز الأصلي كما هو.']);
+    }
+
+    public function paymentAdjustmentState(
+        Request $request,
+        int $booking,
+        SaloraBookingV2Service $service,
+        PaymentWorkflowService $payments,
+    ): JsonResponse {
+        $row = $service->booking($booking);
+        $this->assertBookingParticipant($row, $request, $service);
+        $adjustment = $this->latestPaymentAdjustment($booking);
+        if (!$adjustment) {
+            return response()->json(['payment_adjustment' => null, 'payment_options' => []]);
+        }
+        $invoice = \App\Models\Invoice::query()
+            ->where('booking_id', $booking)
+            ->where('source_type', 'venue_booking')
+            ->latest('id')
+            ->first();
+        return response()->json([
+            'payment_adjustment' => $adjustment,
+            'payment_options' => $invoice && ($adjustment['type'] ?? '') === 'additional_payment'
+                && in_array((string) ($adjustment['status'] ?? ''), ['pending_payment', 'proof_rejected'], true)
+                ? $payments->paymentOptions($invoice)
+                : [],
+        ]);
+    }
+
+    public function uploadAdjustmentProof(
+        Request $request,
+        int $booking,
+        int $adjustment,
+        SaloraBookingV2Service $service,
+        PaymentWorkflowService $payments,
+    ): JsonResponse {
+        $row = $service->booking($booking);
+        $this->assertClient($row, $request, $service);
+        $data = $request->validate([
+            'payment_method_id' => ['required', 'integer', 'exists:payment_methods,id'],
+            'payout_account_id' => ['required', 'integer', 'exists:payout_accounts,id'],
+            'sender_name' => ['required', 'string', 'max:160'],
+            'transaction_reference' => ['nullable', 'string', 'max:190'],
+            'transferred_at' => ['nullable', 'date'],
+            'customer_notes' => ['nullable', 'string', 'max:1500'],
+            'image' => ['required', 'image', 'mimes:jpeg,jpg,png,webp', 'max:5120'],
+        ]);
+        $proof = $payments->submitAdjustmentProof(
+            $request->user(),
+            $booking,
+            $adjustment,
+            $request->file('image'),
+            $data,
+        );
+        return response()->json([
+            'message' => 'تم رفع إثبات فرق الدفع وهو بانتظار مراجعة مالك الصالة دون مهلة زمنية.',
+            'payment_proof' => $proof,
+            'payment_adjustment' => $this->latestPaymentAdjustment($booking),
+        ], 201);
+    }
+
+    public function confirmAdjustmentRefund(
+        Request $request,
+        int $booking,
+        int $adjustment,
+        BookingModificationService $modifications,
+    ): JsonResponse {
+        $result = $modifications->confirmRefund($request->user(), $booking, $adjustment);
+        return response()->json([
+            'message' => 'تم تأكيد رد فرق المبلغ للعميل.',
+            'payment_adjustment' => $result,
+        ]);
     }
 
     public function cancellationPreview(Request $request, int $booking, SaloraBookingV2Service $service): JsonResponse
@@ -653,20 +999,30 @@ class SaloraBookingV2Controller extends Controller
     {
         $row = $service->booking($booking);
         $this->assertClient($row, $request, $service);
-        if (in_array((string) ($row->cancellation_status ?? ''), ['waiting_refund', 'cancelled'], true)) {
-            abort(422, 'تم إرسال الإلغاء مسبقاً أو أن الحجز ملغى بالفعل.');
-        }
         $validated = $request->validate([
             'reason' => ['nullable', 'string', 'max:2000'],
             'accepted_policy' => ['required', 'accepted'],
         ]);
         $result = $service->requestCancellation($booking, $request->user()?->id, $validated['reason'] ?? null);
         $preview = $result['preview'];
-        $message = 'تم تسجيل إلغاء الحجز رقم ' . $booking
-            . '. نسبة الخصم: ' . $preview['deduction_percentage'] . '%'
-            . '، والمبلغ المتوقع استرداده: ' . number_format($preview['refunded_syp']) . ' ل.س.';
-        $this->notifyUser($service->bookingUserId($row), 'تم تسجيل إلغاء الحجز', $message, ['booking_id' => $booking, 'event' => 'booking_cancelled']);
-        $this->notifyUser($service->venueOwnerId($service->venue($service->bookingVenueId($row))), 'إلغاء حجز', $message, ['booking_id' => $booking, 'event' => 'booking_cancelled']);
+        if (empty($result['already_processed'])) {
+            $waitingRefund = $result['status'] === 'waiting_refund';
+            $message = 'تم إلغاء الحجز رقم ' . $booking
+                . '. نسبة الخصم: ' . $preview['deduction_percentage'] . '%'
+                . '، والمبلغ المسترد: ' . number_format($preview['refunded_syp']) . ' ل.س.'
+                . '، والمبلغ المحتفظ به للمالك: ' . number_format($preview['owner_retained_syp']) . ' ل.س.';
+            $event = $waitingRefund ? 'booking_cancellation_waiting_refund' : 'booking_cancelled';
+            $this->notifyUser($service->bookingUserId($row), 'تم إلغاء الحجز', $message, [
+                'booking_id' => $booking, 'event' => $event, 'target_route' => 'booking_details',
+                'refund_syp' => $preview['refunded_syp'], 'refund_percentage' => $preview['refund_percentage'],
+            ]);
+            $this->notifyUser(
+                $service->venueOwnerId($service->venue($service->bookingVenueId($row))),
+                $waitingRefund ? 'إلغاء حجز - مطلوب استرداد' : 'تم إلغاء حجز',
+                $waitingRefund ? $message . ' يرجى رد المبلغ ثم تأكيد الاسترداد من تفاصيل الحجز.' : $message,
+                ['booking_id' => $booking, 'event' => $event, 'target_route' => 'owner_booking_details', 'refund_syp' => $preview['refunded_syp']]
+            );
+        }
         return response()->json($result);
     }
 
@@ -674,9 +1030,6 @@ class SaloraBookingV2Controller extends Controller
     {
         $row = $service->booking($booking);
         $service->assertVenueOwner($service->bookingVenueId($row), $request->user());
-        if (in_array((string) ($row->cancellation_status ?? ''), ['waiting_refund', 'cancelled'], true)) {
-            abort(422, 'تم إرسال الإلغاء مسبقاً أو أن الحجز ملغى بالفعل.');
-        }
         $validated = $request->validate([
             'reason' => ['required', 'string', 'max:2000'],
         ]);
@@ -685,12 +1038,14 @@ class SaloraBookingV2Controller extends Controller
             $request->user()?->id,
             $validated['reason']
         );
-        $this->notifyUser(
-            $service->bookingUserId($row),
-            'ألغت الصالة الحجز',
-            'ألغت الصالة الحجز رقم ' . $booking . ' ويحق لك استرداد 100% من المبلغ. السبب: ' . $validated['reason'],
-            ['booking_id' => $booking, 'event' => 'owner_cancelled']
-        );
+        if (empty($result['already_processed'])) {
+            $this->notifyUser(
+                $service->bookingUserId($row),
+                'ألغت الصالة الحجز',
+                'ألغت الصالة الحجز رقم ' . $booking . ' ويحق لك استرداد 100% من المبلغ. السبب: ' . $validated['reason'],
+                ['booking_id' => $booking, 'event' => 'owner_cancelled', 'target_route' => 'booking_details', 'refund_percentage' => 100]
+            );
+        }
         return response()->json($result);
     }
 
@@ -698,16 +1053,15 @@ class SaloraBookingV2Controller extends Controller
     {
         $row = $service->booking($booking);
         $service->assertVenueOwner($service->bookingVenueId($row), $request->user());
-        if ((string) ($row->cancellation_status ?? '') !== 'waiting_refund') {
-            abort(422, 'هذا الحجز ليس بانتظار استرداد.');
-        }
         $result = $service->confirmRefund($booking, $request->user()?->id);
-        $this->notifyUser(
-            $service->bookingUserId($row),
-            'تم تأكيد استرداد المبلغ',
-            'أكد مالك الصالة رد المبلغ المستحق للحجز رقم ' . $booking . '.',
-            ['booking_id' => $booking, 'event' => 'refund_confirmed']
-        );
+        if (empty($result['already_processed'])) {
+            $this->notifyUser(
+                $service->bookingUserId($row),
+                'تم تأكيد استرداد المبلغ',
+                'أكد مالك الصالة رد المبلغ المستحق للحجز رقم ' . $booking . '.',
+                ['booking_id' => $booking, 'event' => 'refund_confirmed', 'target_route' => 'booking_details']
+            );
+        }
         return response()->json($result);
     }
 
@@ -730,7 +1084,7 @@ class SaloraBookingV2Controller extends Controller
     {
         $this->assertAdmin($request);
         return response()->json(DB::table('salora_booking_financial_events')
-            ->when($request->integer('booking_id'), fn ($query, $bookingId) => $query->where('booking_id', $bookingId))
+            ->when($request->integer('booking_id'), fn($query, $bookingId) => $query->where('booking_id', $bookingId))
             ->orderByDesc('created_at')->paginate(50));
     }
 
@@ -766,6 +1120,110 @@ class SaloraBookingV2Controller extends Controller
             'end_time' => null,
             'minimum_booking_minutes' => null,
         ];
+    }
+
+    private function changeRequestPayload(object $change, SaloraBookingV2Service $service, ?object $booking = null): array
+    {
+        $booking ??= $service->booking((int) $change->booking_id);
+        [$currentStart, $currentEnd] = $service->extractDateTimes($booking);
+        $requested = $this->decodeChangeRequestData($change);
+        $quote = $this->decodeJsonColumn($change, 'quote_snapshot');
+        $oldData = $this->decodeJsonColumn($change, 'old_data');
+        $venue = $service->venue($service->bookingVenueId($booking));
+        $customerId = $service->bookingUserId($booking);
+        $customer = $customerId && Schema::hasTable('users')
+            ? DB::table('users')->where('id', $customerId)->first()
+            : null;
+
+        $oldSnapshot = $oldData ?: (array) $booking;
+        try {
+            [$oldStart, $oldEnd] = $service->extractDateTimes($oldSnapshot);
+        } catch (\Throwable) {
+            $oldStart = $currentStart->copy();
+            $oldEnd = $currentEnd->copy();
+        }
+
+        $requestedStart = isset($requested['start_at'])
+            ? Carbon::parse($requested['start_at'])
+            : (isset($requested['event_date'], $requested['start_time'])
+                ? Carbon::parse($requested['event_date'] . ' ' . $requested['start_time'])
+                : $currentStart->copy());
+        $requestedEnd = isset($requested['end_at'])
+            ? Carbon::parse($requested['end_at'])
+            : (isset($requested['event_date'], $requested['end_time'])
+                ? Carbon::parse($requested['event_date'] . ' ' . $requested['end_time'])
+                : $currentEnd->copy());
+        if ($requestedEnd->lessThanOrEqualTo($requestedStart)) {
+            $requestedEnd->addDay();
+        }
+
+        $oldGuests = (int) ($oldSnapshot['guests_count'] ?? $oldSnapshot['guest_count'] ?? $oldSnapshot['number_of_guests'] ?? 0);
+        $requestedGuests = (int) ($requested['guests_count'] ?? $requested['guest_count'] ?? $requested['number_of_guests'] ?? $oldGuests);
+
+        return [
+            'id' => (int) $change->id,
+            'booking_id' => (int) $change->booking_id,
+            'status' => (string) ($change->status ?? 'pending'),
+            'type' => (string) ($change->type ?? 'modification'),
+            'reason' => $change->reason ?? null,
+            'decision_reason' => $change->decision_reason ?? null,
+            'created_at' => $change->created_at ?? null,
+            'decided_at' => $change->decided_at ?? null,
+            'customer' => [
+                'id' => $customerId,
+                'name' => $customer->name ?? null,
+                'email' => $customer->email ?? null,
+            ],
+            'venue' => [
+                'id' => $service->bookingVenueId($booking),
+                'name' => $venue->name_ar ?? $venue->name_en ?? $venue->name ?? 'الصالة',
+            ],
+            'old' => [
+                'start_at' => $oldStart->toIso8601String(),
+                'end_at' => $oldEnd->toIso8601String(),
+                'guests_count' => $oldGuests,
+                'total_syp' => (float) ($oldSnapshot['total_syp'] ?? $oldSnapshot['final_price_syp'] ?? 0),
+            ],
+            'requested' => [
+                ...$requested,
+                'start_at' => $requestedStart->toIso8601String(),
+                'end_at' => $requestedEnd->toIso8601String(),
+                'guests_count' => $requestedGuests,
+            ],
+            'quote_snapshot' => $quote,
+            'current_booking' => [
+                'start_at' => $currentStart->toIso8601String(),
+                'end_at' => $currentEnd->toIso8601String(),
+                'guests_count' => (int) ($booking->guests_count ?? $booking->guest_count ?? $booking->number_of_guests ?? 0),
+                'total_syp' => (float) ($booking->total_syp ?? $booking->final_price_syp ?? 0),
+            ],
+            'payment_adjustment' => $this->latestPaymentAdjustment((int) $change->booking_id),
+        ];
+    }
+
+    private function decodeJsonColumn(object $row, string $column): ?array
+    {
+        $data = (array) $row;
+        if (!array_key_exists($column, $data) || $data[$column] === null || $data[$column] === '') {
+            return null;
+        }
+        $value = $data[$column];
+        if (is_string($value)) {
+            $value = json_decode($value, true);
+        }
+        return is_array($value) ? $value : null;
+    }
+
+    private function latestPaymentAdjustment(int $bookingId): ?array
+    {
+        if (!Schema::hasTable('salora_booking_payment_adjustments')) {
+            return null;
+        }
+        $row = DB::table('salora_booking_payment_adjustments')
+            ->where('booking_id', $bookingId)
+            ->latest('id')
+            ->first();
+        return $row ? (array) $row : null;
     }
 
     private function decodeChangeRequestData(object $change): array
@@ -846,14 +1304,17 @@ class SaloraBookingV2Controller extends Controller
 
     private function notifyUser(?int $userId, string $title, string $body, array $data = []): void
     {
-        if (!$userId || !class_exists(\App\Models\User::class)) {
+        if (!$userId) {
             return;
         }
         try {
-            $user = \App\Models\User::find($userId);
-            if ($user && method_exists($user, 'notify')) {
-                $user->notify(new SaloraBookingV2Notification($title, $body, $data));
-            }
+            NotificationService::send(
+                $userId,
+                $title,
+                $body,
+                (string) ($data['event'] ?? 'salora_booking_v2'),
+                $data,
+            );
         } catch (\Throwable $error) {
             report($error);
         }

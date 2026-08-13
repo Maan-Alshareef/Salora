@@ -197,45 +197,13 @@ class BookingConflictService
         return $conflicts;
     }
 
+    /**
+     * Automatic payment/booking hold expiry is disabled.
+     * Kept for backwards-compatible callers.
+     */
     public function expireTemporaryHolds(): int
     {
-        $columns = $this->columns();
-        $holdColumn = $columns['hold'];
-
-        if ($holdColumn === null) {
-            return 0;
-        }
-
-        $expired = 0;
-
-        Booking::query()
-            ->whereNotNull($holdColumn)
-            ->where($holdColumn, '<=', now())
-            ->cursor()
-            ->each(function (Booking $booking) use (
-                &$expired,
-                $columns,
-                $holdColumn,
-            ): void {
-                $status = $this->normalizeStatus(
-                    $booking->getAttribute($columns['status']),
-                );
-
-                if (!in_array($status, $this->temporaryStatuses(), true)) {
-                    return;
-                }
-
-                DB::table($booking->getTable())
-                    ->where($booking->getKeyName(), $booking->getKey())
-                    ->update([
-                        $columns['status'] => 'expired',
-                        $holdColumn => null,
-                    ]);
-
-                $expired++;
-            });
-
-        return $expired;
+        return 0;
     }
 
     public function preparationMinutes(): int
@@ -243,10 +211,6 @@ class BookingConflictService
         return max(0, (int) config('salora_booking.preparation_minutes', 30));
     }
 
-    public function temporaryHoldMinutes(): int
-    {
-        return max(1, (int) config('salora_booking.temporary_hold_minutes', 360));
-    }
 
     private function findConflict(
         Booking $booking,
@@ -402,25 +366,9 @@ class BookingConflictService
         string $status,
         array $columns,
     ): bool {
-        if (in_array($status, $this->terminalStatuses(), true)) {
-            return false;
-        }
-
-        if ($columns['hold'] !== null) {
-            $hold = $booking->getAttribute($columns['hold']);
-
-            if ($hold !== null && $hold !== '') {
-                try {
-                    if (Carbon::parse($hold)->isPast()) {
-                        return false;
-                    }
-                } catch (Throwable) {
-                    // Keep the booking blocking if a legacy hold value is malformed.
-                }
-            }
-        }
-
-        return true;
+        // Pending bookings remain blocking until an explicit business action
+        // changes their status. Payment/review deadlines never release a slot.
+        return !in_array($status, $this->terminalStatuses(), true);
     }
 
     private function applyTemporaryHold(
@@ -428,42 +376,13 @@ class BookingConflictService
         string $status,
         array $columns,
     ): void {
+        // Automatic booking/payment expiry was removed. Clear any legacy hold
+        // timestamp whenever the model is written so no stale timer affects
+        // future availability decisions.
         $holdColumn = $columns['hold'];
-
-        if ($holdColumn === null) {
-            return;
-        }
-
-        if (in_array($status, $this->terminalStatuses(), true)) {
+        if ($holdColumn !== null) {
             $booking->setAttribute($holdColumn, null);
-            return;
         }
-
-        if (in_array($status, $this->temporaryStatuses(), true)) {
-            $current = $booking->getAttribute($holdColumn);
-
-            if (
-                !$booking->exists ||
-                $booking->isDirty([
-                    $columns['venue'],
-                    $columns['date'],
-                    $columns['start'],
-                    $columns['end'],
-                    $columns['status'],
-                ]) ||
-                $current === null ||
-                $current === ''
-            ) {
-                $booking->setAttribute(
-                    $holdColumn,
-                    now()->addMinutes($this->temporaryHoldMinutes()),
-                );
-            }
-
-            return;
-        }
-
-        $booking->setAttribute($holdColumn, null);
     }
 
     private function acquireVenueLock(int|string $venueId): void
@@ -527,9 +446,6 @@ class BookingConflictService
             'status' => $booking->getAttribute($columns['status']),
             'start' => $start->toIso8601String(),
             'end' => $end->toIso8601String(),
-            'hold_expires_at' => $columns['hold'] !== null
-                ? $booking->getAttribute($columns['hold'])
-                : null,
         ];
     }
 
@@ -560,14 +476,11 @@ class BookingConflictService
             $listing,
             ['status', 'booking_status'],
         );
-        // Keep the guard hold separate from the payment deadline.
-        // Preferring expires_at here overwrites an explicitly expired payment
-        // deadline while creating a test/legacy booking, so stale holds remain
-        // visible in availability. Use hold_expires_at when the schema has it,
-        // with expires_at only as a compatibility fallback.
+        // Legacy hold timestamps are schema compatibility only; they never
+        // expire a pending booking.
         $hold = $this->pick(
             $listing,
-            ['hold_expires_at', 'expires_at'],
+            ['hold_expires_at'],
             false,
         );
 
@@ -620,11 +533,4 @@ class BookingConflictService
         );
     }
 
-    private function temporaryStatuses(): array
-    {
-        return array_map(
-            'strtolower',
-            (array) config('salora_booking.temporary_hold_statuses', []),
-        );
-    }
 }

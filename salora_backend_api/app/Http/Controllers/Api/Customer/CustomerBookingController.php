@@ -243,7 +243,7 @@ class CustomerBookingController extends BaseApiController
                 'total_syp' => $calculation['total_syp'],
                 'total_usd' => $calculation['total_usd'],
                 'currency' => $currency,
-                'expires_at' => now()->addHours(VenueAvailabilityService::PENDING_HOLD_HOURS),
+                'expires_at' => null,
             ]);
             $workflow->recordInitialState($booking, $request->user());
             $invoice = $invoices->createForBooking($booking->fresh());
@@ -361,37 +361,36 @@ class CustomerBookingController extends BaseApiController
         );
     }
 
-    public function cancel(Request $request, Booking $booking, BookingWorkflowService $workflow)
+    public function cancel(Request $request, Booking $booking, BookingWorkflowService $workflow, SaloraBookingV2Service $bookingV2)
     {
-        abort_unless((int)$booking->customer_id === (int)$request->user()->id, 403);
-        $data = $request->validate(['reason' => 'nullable|string|max:500']);
+        abort_unless((int) $booking->customer_id === (int) $request->user()->id, 403);
+        $data = $request->validate([
+            'reason' => 'nullable|string|max:2000',
+            'accepted_policy' => 'required|accepted',
+        ]);
 
-        if (!in_array($booking->booking_status, [
-            SaloraStatus::BOOKING_PENDING_OWNER_REVIEW,
-            SaloraStatus::BOOKING_PENDING_PAYMENT,
-        ], true)) {
-            return $this->fail('Confirmed bookings must be cancelled through a formal cancellation request.', 422);
-        }
-        if (in_array($booking->payment_status, [SaloraStatus::PAYMENT_PROOF_UPLOADED, SaloraStatus::PAYMENT_APPROVED], true)) {
-            return $this->fail('The booking cannot be cancelled directly after submitting a payment proof.', 422);
-        }
+        // Keep the legacy endpoint for compatibility, but make the V2 cancellation
+        // service the single source of truth for policy, refund, commission, holds,
+        // provider requests and audit/financial events.
+        $result = $bookingV2->requestCancellation(
+            (int) $booking->id,
+            (int) $request->user()->id,
+            $data['reason'] ?? null,
+        );
 
-        DB::transaction(function () use ($request, $booking, $workflow, $data) {
-            $locked = Booking::whereKey($booking->id)->lockForUpdate()->firstOrFail();
-            $workflow->transition($locked, SaloraStatus::BOOKING_CANCELLED, $request->user(), $data['reason'] ?? 'Cancelled by customer.');
-            $locked->providerRequests()->whereIn('status', ['pending', 'accepted'])->update(['status' => 'cancelled']);
-            $locked->invoice?->update(['status' => 'cancelled']);
+        if (empty($result['already_processed'])) {
             NotificationService::send(
-                $locked->owner_id,
-                'تم إلغاء حجز',
-                'ألغى العميل الحجز '.$locked->booking_number.'.',
-                'booking_cancelled',
-                ['booking_id' => $locked->id]
+                (int) $booking->owner_id,
+                $result['status'] === 'waiting_refund' ? 'إلغاء حجز بانتظار الاسترداد' : 'تم إلغاء حجز',
+                $result['status'] === 'waiting_refund'
+                    ? 'ألغى العميل الحجز '.$booking->booking_number.' ويجب رد المبلغ المستحق الظاهر في تفاصيل الحجز.'
+                    : 'ألغى العميل الحجز '.$booking->booking_number.'.',
+                $result['status'] === 'waiting_refund' ? 'booking_cancellation_waiting_refund' : 'booking_cancelled',
+                ['booking_id' => $booking->id, 'event' => $result['status'] === 'waiting_refund' ? 'booking_cancellation_waiting_refund' : 'booking_cancelled', 'target_route' => 'owner_booking_details']
             );
-        });
-
-        ActivityLogger::log('cancelled_booking', 'booking', $booking->id, 'Customer cancelled an unpaid booking.');
-        return $this->ok($booking->fresh(['event', 'invoice', 'statusHistory']), 'Booking cancelled.');
+            ActivityLogger::log('cancelled_booking', 'booking', $booking->id, 'Customer cancelled through unified Salora V2 cancellation flow.');
+        }
+        return $this->ok($result, $result['status'] === 'waiting_refund' ? 'Booking cancelled and awaiting refund.' : 'Booking cancelled.');
     }
 
     private function createProviderRequests(Booking $booking, int $customerId, array $serviceIds, ?string $notes = null): int

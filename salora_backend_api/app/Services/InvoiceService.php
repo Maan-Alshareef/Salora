@@ -25,8 +25,7 @@ class InvoiceService
 
         $invoice ??= new Invoice();
 
-        $deadline = $booking->expires_at
-            ?: now()->addHours(config('salora_payments.payment_deadline_hours', 6));
+        $deadline = null;
 
         $invoice->fill(
             $this->amounts(
@@ -45,8 +44,8 @@ class InvoiceService
                 'source_id' => $booking->id,
                 'currency' => $booking->currency,
                 'status' => $invoice->status ?: 'unpaid',
-                'due_at' => $deadline,
-                'payment_deadline_at' => $deadline,
+                'due_at' => null,
+                'payment_deadline_at' => null,
                 'verification_token' => $invoice->verification_token ?: Str::random(48),
             ],
         );
@@ -77,8 +76,7 @@ class InvoiceService
 
         $syp = (float) $request->price_syp;
         $usd = (float) $request->price_usd;
-        $deadline = $invoice->payment_deadline_at
-            ?: now()->addHours(config('salora_payments.payment_deadline_hours', 6));
+        $deadline = null;
 
         $invoice->fill(
             $this->amounts($syp, $usd, 0, 0, $syp, $usd) + [
@@ -90,8 +88,8 @@ class InvoiceService
                 'source_id' => $request->id,
                 'currency' => $syp > 0 ? 'SYP' : 'USD',
                 'status' => $invoice->status ?: 'unpaid',
-                'due_at' => $deadline,
-                'payment_deadline_at' => $deadline,
+                'due_at' => null,
+                'payment_deadline_at' => null,
                 'verification_token' => $invoice->verification_token ?: Str::random(48),
             ],
         );
@@ -104,11 +102,21 @@ class InvoiceService
 
         $invoice->save();
 
+        $invoiceStatus = strtolower((string) $invoice->status);
+        $requestPaymentStatus = strtolower((string) ($request->payment_status ?? 'unpaid'));
+        $resolvedPaymentStatus = match ($invoiceStatus) {
+            'paid' => 'approved',
+            'proof_uploaded' => 'proof_uploaded',
+            default => $requestPaymentStatus === 'rejected' ? 'rejected' : 'unpaid',
+        };
+
         $request->forceFill([
             'invoice_id' => $invoice->id,
             'invoice_number' => $invoice->invoice_number,
-            'payment_status' => $invoice->status === 'paid' ? 'approved' : 'unpaid',
-            'payment_deadline_at' => $invoice->payment_deadline_at,
+            // Never downgrade proof_uploaded back to unpaid just because the
+            // invoice was re-opened while the provider is reviewing the proof.
+            'payment_status' => $resolvedPaymentStatus,
+            'payment_deadline_at' => null,
         ])->save();
 
         return $invoice->fresh();

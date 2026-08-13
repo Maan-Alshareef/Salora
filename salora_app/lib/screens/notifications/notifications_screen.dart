@@ -5,6 +5,8 @@ import '../../core/theme/app_colors.dart';
 import '../../models/app_notification.dart';
 import '../../providers/booking_provider.dart';
 import '../../providers/notification_provider.dart';
+import '../../providers/venue_provider.dart';
+import '../../screens/venue/venue_details_screen.dart';
 import '../../screens/booking/booking_details_screen.dart';
 import '../../screens/provider/business_finance_screen.dart';
 import '../../screens/provider/provider_requests_screen.dart';
@@ -176,6 +178,26 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           builder: (_) => const BusinessFinanceScreen(initialTab: 1),
         ),
       );
+      return;
+    }
+
+    if (route == 'offer_details') {
+      final venueId = (data['venue_id'] ?? '').toString();
+      final venues = context.read<VenueProvider>();
+      // Always refresh here so a just-published offer is visible immediately
+      // even when the app already had an older cached venue list.
+      await venues.loadVenues();
+      if (!mounted) return;
+      for (final venue in venues.venues) {
+        if (venue.id == venueId) {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => VenueDetailsScreen(venue: venue)),
+          );
+          return;
+        }
+      }
+      _message('تعذر إيجاد الصالة المرتبطة بالعرض.');
       return;
     }
 

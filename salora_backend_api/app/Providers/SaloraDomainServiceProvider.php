@@ -3,7 +3,7 @@
 namespace App\Providers;
 
 use App\Console\Commands\AnnounceOffers;
-use App\Console\Commands\ExpireBookingHolds;
+use App\Console\Commands\CleanupLegacyExpiredBookings;
 use App\Console\Commands\PushPendingNotifications;
 use App\Console\Commands\ReportBookingConflicts;
 use App\Models\Booking;
@@ -36,20 +36,15 @@ class SaloraDomainServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 ReportBookingConflicts::class,
-                ExpireBookingHolds::class,
                 PushPendingNotifications::class,
                 AnnounceOffers::class,
+                CleanupLegacyExpiredBookings::class,
             ]);
         }
 
         $this->callAfterResolving(
             Schedule::class,
             function (Schedule $schedule): void {
-                $schedule
-                    ->command('salora:expire-booking-holds')
-                    ->everyMinute()
-                    ->withoutOverlapping();
-
                 $schedule
                     ->command('salora:push-pending-notifications')
                     ->everyMinute()

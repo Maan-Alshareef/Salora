@@ -35,7 +35,7 @@ class BookingSuccessScreen extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               Text(
-                'تم حجز الموعد مؤقتًا في ${booking.venueName}. ارفع إيصال الدفع الآن، وبعد أن يتحقق مالك الصالة منه يتثبت الحجز نهائيًا.',
+                'تم حجز الموعد مؤقتًا في ${booking.venueName}. بعد الدفع ارفع الإيصال في أي وقت بدون مهلة زمنية، وبعد أن يتحقق مالك الصالة منه يتثبت الحجز نهائيًا.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: AppColors.textSecondary,

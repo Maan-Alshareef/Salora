@@ -2,10 +2,6 @@
 
 return [
     'commission_percent' => 10,
-    'payment_deadline_hours' => 6,
-    'payment_reminder_hours' => 2,
-    'review_deadline_hours' => 12,
-    'review_reminder_hours' => 2,
     'refund_deadline_hours' => 48,
     'customer_refund' => [
         'full_before_days' => 7,

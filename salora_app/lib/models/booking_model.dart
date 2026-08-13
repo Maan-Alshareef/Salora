@@ -1,3 +1,4 @@
+import '../core/network/api_config.dart';
 import '../core/utils/arabic_text.dart';
 import 'invoice_item.dart';
 import 'provider_service_request_model.dart';
@@ -43,8 +44,12 @@ extension BookingStatusX on BookingStatus {
   bool get canUploadPaymentProof => this == BookingStatus.approved;
   bool get canRequestProviderService => this == BookingStatus.paid;
   bool get canCancelDirectly =>
-      this == BookingStatus.pending || this == BookingStatus.approved;
-  bool get canRequestCancellation => this == BookingStatus.paid;
+      this == BookingStatus.pending ||
+      this == BookingStatus.approved ||
+      this == BookingStatus.paymentUploaded ||
+      this == BookingStatus.paid ||
+      this == BookingStatus.modificationRequested;
+  bool get canRequestCancellation => false;
   bool get canReview => this == BookingStatus.completed;
   bool get isFinal =>
       this == BookingStatus.completed ||
@@ -77,7 +82,6 @@ class BookingModel {
   final String? receiptPath;
   final String? invoiceId;
   final String? invoiceNumber;
-  final DateTime? paymentDeadlineAt;
   final String? receiptNumber;
   final String? verificationUrl;
   final String? rejectionReason;
@@ -109,7 +113,6 @@ class BookingModel {
     this.receiptPath,
     this.invoiceId,
     this.invoiceNumber,
-    this.paymentDeadlineAt,
     this.receiptNumber,
     this.verificationUrl,
     this.rejectionReason,
@@ -161,7 +164,21 @@ class BookingModel {
         : <String, dynamic>{};
     final latestProof = json['latest_payment_proof'] is Map
         ? Map<String, dynamic>.from(json['latest_payment_proof'] as Map)
+        : invoice['latest_payment_proof'] is Map
+        ? Map<String, dynamic>.from(invoice['latest_payment_proof'] as Map)
         : <String, dynamic>{};
+    final rawReceiptSource = (
+      latestProof['image_full_url'] ??
+      latestProof['image_url'] ??
+      latestProof['local_path']
+    )?.toString().trim();
+    String? receiptSource;
+    if (rawReceiptSource != null && rawReceiptSource.isNotEmpty) {
+      receiptSource =
+          rawReceiptSource.startsWith('/') || rawReceiptSource.startsWith('http')
+          ? ApiConfig.resolveAssetUrl(rawReceiptSource)
+          : rawReceiptSource;
+    }
 
     return BookingModel(
       id: '${json['id'] ?? ''}',
@@ -178,18 +195,16 @@ class BookingModel {
         venue['vendor_categories'],
       ).map(ArabicText.tr).toList(),
       city: ArabicText.tr((venue['city'] ?? json['city'] ?? '').toString()),
-      eventDate:
-          DateTime.tryParse(
-            (json['event_date'] ?? DateTime.now().toIso8601String()).toString(),
-          ) ??
-          DateTime.now(),
-      startTime: _shortTime((json['start_time'] ?? '').toString()),
-      endTime: _shortTime((json['end_time'] ?? '').toString()),
+      eventDate: _bookingDateFromApi(json),
+      startTime: _bookingTimeFromApi(json['start_at'], json['start_time']),
+      endTime: _bookingTimeFromApi(json['end_at'], json['end_time']),
       eventType: ArabicText.tr(
         (eventTypeMap['name_ar'] ?? eventTypeMap['name_en'] ?? 'مناسبة')
             .toString(),
       ),
-      guests: _toInt(json['guests_count']),
+      guests: _toInt(
+        json['guests_count'] ?? json['guest_count'] ?? json['number_of_guests'],
+      ),
       services: invoiceItems.map((item) => item.title).toList(),
       invoiceItems: invoiceItems,
       providerRequests: providerRequestsJson
@@ -202,12 +217,9 @@ class BookingModel {
           .toList(),
       totalAmount: _toInt(json['total_syp'] ?? json['invoice_total'] ?? 0),
       paymentMethod: PaymentMethod.bankTransfer,
-      receiptPath: latestProof['local_path']?.toString(),
+      receiptPath: receiptSource,
       invoiceId: (invoice['id'] ?? json['invoice_id'])?.toString(),
       invoiceNumber: invoice['invoice_number']?.toString(),
-      paymentDeadlineAt: DateTime.tryParse(
-        (invoice['payment_deadline_at'] ?? '').toString(),
-      ),
       receiptNumber: invoice['receipt_number']?.toString(),
       verificationUrl: invoice['verification_url']?.toString(),
       rejectionReason: json['rejection_reason']?.toString(),
@@ -272,7 +284,6 @@ class BookingModel {
     receiptPath: receiptPath ?? this.receiptPath,
     invoiceId: invoiceId,
     invoiceNumber: invoiceNumber,
-    paymentDeadlineAt: paymentDeadlineAt,
     receiptNumber: receiptNumber ?? this.receiptNumber,
     verificationUrl: verificationUrl,
     rejectionReason: rejectionReason ?? this.rejectionReason,
@@ -309,6 +320,31 @@ BookingStatus _statusFromApi(String bookingStatus, String paymentStatus) {
         return BookingStatus.paymentUploaded;
       return BookingStatus.pending;
   }
+}
+
+DateTime _bookingDateFromApi(Map<String, dynamic> json) {
+  final startAt = DateTime.tryParse((json['start_at'] ?? '').toString());
+  if (startAt != null) {
+    return DateTime(startAt.year, startAt.month, startAt.day);
+  }
+
+  return DateTime.tryParse(
+        (json['event_date'] ??
+                json['booking_date'] ??
+                json['date'] ??
+                DateTime.now().toIso8601String())
+            .toString(),
+      ) ??
+      DateTime.now();
+}
+
+String _bookingTimeFromApi(dynamic dateTimeValue, dynamic timeValue) {
+  final parsed = DateTime.tryParse(dateTimeValue?.toString() ?? '');
+  if (parsed != null) {
+    return '${parsed.hour.toString().padLeft(2, '0')}:'
+        '${parsed.minute.toString().padLeft(2, '0')}';
+  }
+  return _shortTime(timeValue?.toString() ?? '');
 }
 
 String _shortTime(String value) =>

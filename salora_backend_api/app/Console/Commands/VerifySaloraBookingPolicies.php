@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Services\VenueAvailabilityService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
@@ -11,14 +10,13 @@ use Illuminate\Support\Facades\Schema;
 class VerifySaloraBookingPolicies extends Command
 {
     protected $signature = 'salora:verify-booking-policies {--expect-offers-empty}';
-    protected $description = 'Verify final booking, refund, offer and deadline integration.';
+    protected $description = 'Verify final booking, refund, offer and no-deadline integration.';
 
     public function handle(): int
     {
         $checks = [
-            'payment_deadline_6h' => (int) config('salora_payments.payment_deadline_hours') === 6,
-            'review_deadline_12h' => (int) config('salora_payments.review_deadline_hours') === 12,
-            'temporary_hold_6h' => VenueAvailabilityService::PENDING_HOLD_HOURS === 6,
+            'payment_deadlines_disabled' => !array_key_exists('payment_deadline_hours', config('salora_payments')),
+            'review_deadlines_disabled' => !array_key_exists('review_deadline_hours', config('salora_payments')),
             'refund_full_before_7_days' => (int) config('salora_payments.customer_refund.full_before_days') === 7,
             'refund_half_from_5_days' => (int) config('salora_payments.customer_refund.half_from_days') === 5,
             'refund_zero_under_120h' => (int) config('salora_payments.customer_refund.zero_under_hours') === 120,

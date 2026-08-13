@@ -20,8 +20,8 @@ return new class extends Migration
                 DB::table('invoices')
                     ->where('status', 'unpaid')
                     ->update([
-                        'due_at' => now()->addHours(6),
-                        'payment_deadline_at' => now()->addHours(6),
+                        'due_at' => null,
+                        'payment_deadline_at' => null,
                         'payment_reminder_sent_at' => null,
                         'updated_at' => now(),
                     ]);
@@ -30,7 +30,7 @@ return new class extends Migration
             if (Schema::hasTable('bookings')) {
                 DB::table('bookings')
                     ->whereIn('booking_status', ['pending_owner_review', 'pending_payment'])
-                    ->update(['expires_at' => now()->addHours(6), 'updated_at' => now()]);
+                    ->update(['expires_at' => null, 'updated_at' => now()]);
                 DB::table('bookings')
                     ->where('booking_status', 'payment_under_review')
                     ->update(['expires_at' => null, 'updated_at' => now()]);

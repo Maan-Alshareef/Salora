@@ -13,6 +13,37 @@ use Illuminate\Validation\ValidationException;
 
 class ProviderServicePaymentController extends BaseApiController
 {
+
+    public function invoice(
+        Request $request,
+        ProviderServiceRequest $providerRequest,
+        InvoiceService $invoices,
+    ) {
+        abort_unless(
+            (int) $providerRequest->customer_id === (int) $request->user()->id,
+            403,
+        );
+
+        if ($providerRequest->status !== 'accepted') {
+            return $this->fail(
+                'يجب أن يقبل مقدم الخدمة الطلب أولاً قبل تجهيز فاتورة الدفع.',
+                422,
+            );
+        }
+
+        $invoice = $invoices->createForProviderRequest($providerRequest->fresh());
+        $invoice->load([
+            'providerServiceRequest.service',
+            'providerServiceRequest.provider:id,name,phone,avatar',
+            'payee:id,name,phone,avatar',
+            'latestPaymentProof.method',
+            'latestPaymentProof.payoutAccount',
+            'latestPaymentProof.transaction',
+        ]);
+
+        return $this->ok($invoice, 'فاتورة الخدمة جاهزة.');
+    }
+
     public function store(
         Request $request,
         ProviderServiceRequest $providerRequest,

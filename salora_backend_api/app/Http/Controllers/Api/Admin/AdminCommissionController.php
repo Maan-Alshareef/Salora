@@ -5,13 +5,16 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Api\BaseApiController;
 use App\Models\PlatformCommission;
 use App\Services\ActivityLogger;
+use App\Services\PlatformCommissionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class AdminCommissionController extends BaseApiController
 {
-    public function index(Request $request)
+    public function index(Request $request, PlatformCommissionService $commissionService)
     {
+        // Self-heal rows that were left stale by older booking-modification code.
+        $commissionService->reconcileBookings();
         $query = PlatformCommission::query()->with([
             'businessUser:id,name,email,role',
             'customer:id,name,email',
@@ -40,7 +43,9 @@ class AdminCommissionController extends BaseApiController
 
         return $this->ok([
             'summary' => $this->summary(),
-            'items' => $query->latest('approved_at')->latest('id')->limit(500)->get(),
+            // A modified booking keeps the same commission row by design. Sort by
+            // last update so the recalculated row is visible immediately at the top.
+            'items' => $query->latest('updated_at')->latest('id')->limit(500)->get(),
         ]);
     }
 

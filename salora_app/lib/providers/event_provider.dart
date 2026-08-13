@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/network/api_client.dart';
 import '../core/utils/arabic_text.dart';
 import '../models/event_model.dart';
+import '../models/invitation_draft_model.dart';
 
 class EventProvider extends ChangeNotifier {
   EventProvider(this._api);
@@ -11,6 +12,8 @@ class EventProvider extends ChangeNotifier {
   final List<EventModel> _events = [];
   final Map<String, List<String>> _remoteTemplates = {};
   final Map<String, String> _eventTypeIds = {};
+  final Map<String, String> _remoteInvitationMessages = {};
+  final Map<String, int> _remoteInvitationTemplateIds = {};
 
   bool isLoading = false;
   String? error;
@@ -19,12 +22,18 @@ class EventProvider extends ChangeNotifier {
 
   String? idForType(EventType type) => _eventTypeIds[type.label];
 
+  String? invitationMessageForType(EventType type) => _remoteInvitationMessages[type.label];
+
+  int? invitationTemplateIdForType(EventType type) => _remoteInvitationTemplateIds[type.label];
+
   Future<void> loadTemplates() async {
     try {
       final data = await _api.get('/event-types');
       final list = data is List ? data : const [];
       _remoteTemplates.clear();
       _eventTypeIds.clear();
+      _remoteInvitationMessages.clear();
+      _remoteInvitationTemplateIds.clear();
       for (final raw in list.whereType<Map>()) {
         final item = Map<String, dynamic>.from(raw);
         final name = ArabicText.tr((item['name_ar'] ?? item['name_en'] ?? '').toString());
@@ -35,10 +44,33 @@ class EventProvider extends ChangeNotifier {
             .map((task) => ArabicText.tr((task['task_ar'] ?? task['task_en'] ?? '').toString()))
             .where((task) => task.trim().isNotEmpty)
             .toList();
+        final invitationTemplates = (item['invitation_templates'] is List
+                ? item['invitation_templates'] as List
+                : const [])
+            .whereType<Map>()
+            .map((template) => Map<String, dynamic>.from(template))
+            .where((template) => template['is_active'] != false)
+            .toList();
+        final invitationTemplate = invitationTemplates.isEmpty ? null : invitationTemplates.first;
+        final invitationBody = invitationTemplate == null
+            ? ''
+            : (invitationTemplate['body_ar'] ?? invitationTemplate['body_en'] ?? '').toString().trim();
+        final invitationTemplateId = invitationTemplate == null
+            ? null
+            : int.tryParse('${invitationTemplate['id'] ?? ''}');
         if (name.isNotEmpty && id.isNotEmpty) {
+          final typeLabel = eventTypeFromLabel(name).label;
           _eventTypeIds[name] = id;
-          _eventTypeIds[eventTypeFromLabel(name).label] = id;
+          _eventTypeIds[typeLabel] = id;
           _remoteTemplates[name] = tasks;
+          if (invitationBody.isNotEmpty) {
+            _remoteInvitationMessages[name] = invitationBody;
+            _remoteInvitationMessages[typeLabel] = invitationBody;
+          }
+          if (invitationTemplateId != null) {
+            _remoteInvitationTemplateIds[name] = invitationTemplateId;
+            _remoteInvitationTemplateIds[typeLabel] = invitationTemplateId;
+          }
         }
       }
       notifyListeners();
@@ -201,6 +233,31 @@ class EventProvider extends ChangeNotifier {
       tasks: _events[eventIndex].tasks.where((task) => task.id != taskId).toList(),
     );
     notifyListeners();
+  }
+
+  Future<InvitationDraft?> loadInvitationDraft(String eventId) async {
+    final data = await _api.get('/customer/events/$eventId/invitation');
+    if (data is! Map) return null;
+    return InvitationDraft.fromJson(Map<String, dynamic>.from(data));
+  }
+
+  Future<InvitationDraft> saveInvitationDraft({
+    required String eventId,
+    required EventType eventType,
+    required String style,
+    required String hostName,
+    required String location,
+    required String message,
+  }) async {
+    final invitationTemplateId = invitationTemplateIdForType(eventType);
+    final data = await _api.put('/customer/events/$eventId/invitation', {
+      if (invitationTemplateId != null) 'invitation_template_id': invitationTemplateId,
+      'style': style,
+      'host_name': hostName.trim(),
+      'location': location.trim(),
+      'message': message.trim(),
+    });
+    return InvitationDraft.fromJson(Map<String, dynamic>.from(data as Map));
   }
 
   Future<void> deleteEvent(String eventId) async {

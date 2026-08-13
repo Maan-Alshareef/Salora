@@ -24,4 +24,5 @@ class Event extends Model
     public function eventType(){ return $this->belongsTo(EventType::class); }
     public function todoItems(){ return $this->hasMany(EventTodoItem::class)->orderBy('sort_order')->orderBy('id'); }
     public function bookings(){ return $this->hasMany(Booking::class); }
+    public function invitation(){ return $this->hasOne(GeneratedInvitation::class); }
 }

@@ -28,4 +28,3 @@ Artisan::command('salora:sync-payment-methods', function (): int {
 })->purpose('Sync the three approved Salora payment methods and disable all others.');
 
 Schedule::command('salora:send-todo-reminders')->everyTenMinutes()->withoutOverlapping();
-Schedule::command('salora:process-payment-deadlines')->everyTenMinutes()->withoutOverlapping();

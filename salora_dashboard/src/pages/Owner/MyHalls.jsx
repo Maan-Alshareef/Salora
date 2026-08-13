@@ -150,7 +150,7 @@ function Editor({ venue, onClose }) {
 }
 
 export default function MyHalls() {
-  const { ownerVenues, formatPricePair, arabicLabel } = useApp();
+  const { ownerVenues, formatPricePair, arabicLabel, setGlobalViewVenue } = useApp();
   const navigate = useNavigate();
   const [editing, setEditing] = useState(null);
 
@@ -193,10 +193,11 @@ export default function MyHalls() {
                 {venue.pendingRevision && <div className="rounded-2xl border border-amber-400/25 bg-amber-500/10 p-3 text-xs font-bold leading-6 text-amber-200">⏳ يوجد تعديل بيانات بانتظار مراجعة الأدمن. أوقات العمل لا تدخل ضمن هذه المراجعة.</div>}
 
                 <div className="grid gap-2 sm:grid-cols-2">
+                  <button onClick={() => setGlobalViewVenue(venue)} className="rounded-xl border border-violet-400/25 bg-violet-500/10 py-2.5 text-sm font-black text-violet-200 hover:bg-violet-500/20">👁️ عرض الصالة</button>
                   <button onClick={() => setEditing(venue)} className="rounded-xl bg-amber-500 py-2.5 text-sm font-black text-slate-950 hover:bg-amber-400">تعديل البيانات والصور</button>
                   <button onClick={() => navigate("/owner/booking-settings-v2")} className="rounded-xl border border-blue-400/25 bg-blue-500/10 py-2.5 text-sm font-black text-blue-200 hover:bg-blue-500/20">الساعات والعروض</button>
                   <button onClick={() => navigate("/owner/working-hours")} className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 py-2.5 text-sm font-black text-emerald-200 hover:bg-emerald-500/20">التوافر وأوقات العمل</button>
-                  <button onClick={() => venue.mapUrl && window.open(venue.mapUrl, "_blank", "noopener,noreferrer")} disabled={!venue.mapUrl} className="rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm font-black text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40">فتح الخريطة</button>
+                  <button onClick={() => venue.mapUrl && window.open(venue.mapUrl, "_blank", "noopener,noreferrer")} disabled={!venue.mapUrl} className="rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm font-black text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 sm:col-span-2">فتح الخريطة</button>
                 </div>
               </div>
             </article>

@@ -70,10 +70,10 @@ class BookingProvider extends ChangeNotifier {
   }
 
   Future<void> uploadProviderServiceReceipt(
-    String requestId,
-    String path, {
-    String paymentMethod = 'sham_cash',
-  }) async {
+      String requestId,
+      String path, {
+        String paymentMethod = 'sham_cash',
+      }) async {
     if (!_api.isAuthenticated || int.tryParse(requestId) == null) {
       throw const ApiException(
         'لا يمكن رفع إيصال دفع الخدمة قبل تسجيل الدخول.',
@@ -110,7 +110,7 @@ class BookingProvider extends ChangeNotifier {
         ..clear()
         ..addAll(
           list.whereType<Map>().map(
-            (item) => BookingModel.fromJson(Map<String, dynamic>.from(item)),
+                (item) => BookingModel.fromJson(Map<String, dynamic>.from(item)),
           ),
         );
     } catch (e) {
@@ -182,10 +182,10 @@ class BookingProvider extends ChangeNotifier {
   }
 
   Future<void> uploadReceipt(
-    String bookingId,
-    String path, {
-    String paymentMethod = 'bank_transfer',
-  }) async {
+      String bookingId,
+      String path, {
+        String paymentMethod = 'bank_transfer',
+      }) async {
     if (!_api.isAuthenticated || int.tryParse(bookingId) == null) {
       throw const ApiException(
         'لا يمكن رفع إيصال الدفع قبل تسجيل الدخول أو حفظ الحجز.',
@@ -210,32 +210,22 @@ class BookingProvider extends ChangeNotifier {
     await loadMyBookings();
   }
 
-  Future<void> cancelBooking(String bookingId, {required String reason}) async {
+  Future<void> cancelBooking(
+    String bookingId, {
+    required String reason,
+    bool acceptedPolicy = false,
+  }) async {
     final index = _bookings.indexWhere((booking) => booking.id == bookingId);
     if (index == -1) throw const ApiException('تعذر العثور على الحجز.');
-    final booking = _bookings[index];
-
-    if (booking.status.canRequestCancellation) {
-      await _api.post('/customer/bookings/$bookingId/change-requests', {
-        'type': 'cancellation',
-        'reason': reason.trim(),
-      });
-      _bookings[index] = booking.copyWith(
-        status: BookingStatus.cancellationRequested,
-      );
-    } else if (booking.status.canCancelDirectly) {
-      final data = await _api.post('/customer/bookings/$bookingId/cancel', {
-        'reason': reason.trim(),
-      });
-      _bookings[index] = BookingModel.fromJson(
-        Map<String, dynamic>.from(data as Map),
-      );
-    } else {
-      throw const ApiException(
-        'حالة الحجز الحالية لا تسمح بإرسال طلب إلغاء جديد.',
-      );
+    if (!acceptedPolicy) {
+      throw const ApiException('يجب عرض سياسة الإلغاء والمبلغ والموافقة عليها قبل التأكيد.');
     }
-    notifyListeners();
+
+    await _api.post('/salora-v2/bookings/$bookingId/cancel', {
+      'accepted_policy': true,
+      if (reason.trim().isNotEmpty) 'reason': reason.trim(),
+    });
+    await loadMyBookings();
   }
 
   Future<void> requestProviderServices({
@@ -250,9 +240,9 @@ class BookingProvider extends ChangeNotifier {
 
     final data = await _api
         .post('/customer/bookings/$bookingId/provider-services', {
-          'provider_service_ids': numericIds,
-          if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
-        });
+      'provider_service_ids': numericIds,
+      if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+    });
     final updated = BookingModel.fromJson(
       Map<String, dynamic>.from(data as Map),
     );
@@ -265,6 +255,7 @@ class BookingProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Compatibility wrapper. All hall booking modifications use Salora V2.
   Future<void> requestModification({
     required String bookingId,
     required DateTime date,
@@ -273,13 +264,31 @@ class BookingProvider extends ChangeNotifier {
     required int guests,
     required String reason,
   }) async {
-    await _api.post('/customer/bookings/$bookingId/change-requests', {
-      'type': 'modification',
-      'reason': reason.trim(),
-      'event_date': date.toIso8601String().split('T').first,
-      'start_time': _apiClock(startTime),
-      'end_time': _apiClock(endTime),
+    final startParts = _clockParts(startTime);
+    final endParts = _clockParts(endTime);
+    final startAt = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      startParts[0],
+      startParts[1],
+    );
+    var endAt = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      endParts[0],
+      endParts[1],
+    );
+    if (!endAt.isAfter(startAt)) {
+      endAt = endAt.add(const Duration(days: 1));
+    }
+
+    await _api.post('/salora-v2/bookings/$bookingId/change-requests', {
+      'start_at': startAt.toIso8601String(),
+      'end_at': endAt.toIso8601String(),
       'guests_count': guests,
+      if (reason.trim().isNotEmpty) 'reason': reason.trim(),
     });
     final index = _bookings.indexWhere((booking) => booking.id == bookingId);
     if (index != -1) {
@@ -289,6 +298,14 @@ class BookingProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+}
+
+List<int> _clockParts(String value) {
+  final match = RegExp(r'(\d{1,2}):(\d{2})').firstMatch(value.trim());
+  return <int>[
+    int.tryParse(match?.group(1) ?? '') ?? 0,
+    int.tryParse(match?.group(2) ?? '') ?? 0,
+  ];
 }
 
 String _apiClock(String value) {

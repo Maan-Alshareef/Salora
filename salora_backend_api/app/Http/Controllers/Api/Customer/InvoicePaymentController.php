@@ -4,9 +4,7 @@ namespace App\Http\Controllers\Api\Customer;
 
 use App\Http\Controllers\Api\BaseApiController;
 use App\Models\Invoice;
-use App\Models\PaymentRefund;
 use App\Services\PaymentWorkflowService;
-use App\Services\RefundWorkflowService;
 use Illuminate\Http\Request;
 
 class InvoicePaymentController extends BaseApiController
@@ -54,11 +52,7 @@ class InvoicePaymentController extends BaseApiController
 
         return $this->ok([
             'invoice' => $invoice,
-            'payment_options' => in_array(
-                $invoice->status,
-                ['unpaid'],
-                true,
-            )
+            'payment_options' => $payments->canAcceptPayment($invoice)
                 ? $payments->paymentOptions($invoice)
                 : [],
         ]);
@@ -98,68 +92,5 @@ class InvoicePaymentController extends BaseApiController
         );
     }
 
-    public function requestRefund(
-        Request $request,
-        Invoice $invoice,
-        RefundWorkflowService $refunds,
-    ) {
-        abort_unless(
-            (int) $invoice->customer_id === (int) $request->user()->id,
-            403,
-        );
 
-        $data = $request->validate([
-            'reason' => 'required|string|max:2000',
-        ]);
-
-        return $this->ok(
-            $refunds->requestByCustomer(
-                $request->user(),
-                $invoice,
-                $data['reason'],
-            ),
-            'تم تسجيل طلب الإلغاء والاسترداد.',
-            201,
-        );
-    }
-
-    public function confirmRefund(
-        Request $request,
-        PaymentRefund $refund,
-        RefundWorkflowService $refunds,
-    ) {
-        abort_unless(
-            (int) $refund->customer_id === (int) $request->user()->id,
-            403,
-        );
-
-        return $this->ok(
-            $refunds->confirm($request->user(), $refund),
-            'تم تأكيد استلام المبلغ.',
-        );
-    }
-
-    public function disputeRefund(
-        Request $request,
-        PaymentRefund $refund,
-        RefundWorkflowService $refunds,
-    ) {
-        abort_unless(
-            (int) $refund->customer_id === (int) $request->user()->id,
-            403,
-        );
-
-        $data = $request->validate([
-            'reason' => 'required|string|max:1500',
-        ]);
-
-        return $this->ok(
-            $refunds->dispute(
-                $request->user(),
-                $refund,
-                $data['reason'],
-            ),
-            'تم فتح نزاع وسيظهر للأدمن للمراجعة.',
-        );
-    }
 }

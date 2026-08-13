@@ -5,12 +5,14 @@ namespace App\Services;
 use App\Models\Invoice;
 use App\Models\PaymentMethod;
 use App\Models\PaymentProof;
+use App\Models\PaymentTransaction;
 use App\Models\PayoutAccount;
 use App\Models\ProviderServiceRequest;
 use App\Models\User;
 use App\Support\SaloraStatus;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class PaymentWorkflowService
@@ -18,6 +20,7 @@ class PaymentWorkflowService
     public function __construct(
         private readonly InvoiceService $invoices,
         private readonly BookingWorkflowService $bookings,
+        private readonly BookingModificationService $modifications,
     ) {
     }
 
@@ -78,17 +81,15 @@ class PaymentWorkflowService
                 abort(403);
             }
 
-            if ($locked->status === 'paid') {
+            if ($locked->status !== 'unpaid') {
                 throw ValidationException::withMessages([
-                    'invoice' => ['الفاتورة مدفوعة مسبقاً.'],
+                    'invoice' => [$locked->status === 'paid'
+                        ? 'الفاتورة مدفوعة مسبقاً.'
+                        : 'هذه الفاتورة لا تقبل دفعة جديدة بحالتها الحالية.'],
                 ]);
             }
 
-            if ($locked->payment_deadline_at?->isPast()) {
-                throw ValidationException::withMessages([
-                    'invoice' => ['انتهت مهلة الدفع لهذه الفاتورة.'],
-                ]);
-            }
+            $this->assertInvoiceSourceActive($locked);
 
             if (
                 PaymentProof::query()
@@ -167,12 +168,12 @@ class PaymentWorkflowService
             ]);
 
             $this->invoices->registerProof($locked, $proof);
-            $reviewDeadline = now()->addHours(
-                (int) config('salora_payments.review_deadline_hours', 12),
-            );
             $locked->update([
                 'status' => 'proof_uploaded',
-                'review_deadline_at' => $reviewDeadline,
+                'due_at' => null,
+                'payment_deadline_at' => null,
+                'payment_reminder_sent_at' => null,
+                'review_deadline_at' => null,
                 'review_reminder_sent_at' => null,
                 'review_overdue_notified_at' => null,
             ]);
@@ -213,7 +214,14 @@ class PaymentWorkflowService
                     ->whereKey($locked->source_id)
                     ->update([
                         'payment_status' => 'proof_uploaded',
+                        'payment_method' => $method->slug,
+                        // Keep the legacy provider-request payment fields in sync with
+                        // the canonical payment_proofs row so old reports/screens never
+                        // claim that no receipt was uploaded.
+                        'payment_proof_path' => $path,
+                        'payment_proof_original_name' => $image->getClientOriginalName(),
                         'payment_uploaded_at' => now(),
+                        'payment_reviewed_at' => null,
                         'payment_rejection_reason' => null,
                     ]);
             }
@@ -235,7 +243,6 @@ class PaymentWorkflowService
                         ? $locked->source_id
                         : null,
                     'source_type' => $locked->source_type,
-                    'review_deadline_at' => $reviewDeadline->toIso8601String(),
                     'target_route' => 'business_payments',
                 ],
             );
@@ -249,6 +256,123 @@ class PaymentWorkflowService
                 'payoutAccount',
                 'transaction',
             ]);
+        });
+    }
+
+    public function submitAdjustmentProof(
+        User $customer,
+        int $bookingId,
+        int $adjustmentId,
+        UploadedFile $image,
+        array $data,
+    ): PaymentProof {
+        return DB::transaction(function () use ($customer, $bookingId, $adjustmentId, $image, $data): PaymentProof {
+            $adjustment = DB::table('salora_booking_payment_adjustments')
+                ->where('id', $adjustmentId)
+                ->where('booking_id', $bookingId)
+                ->where('type', 'additional_payment')
+                ->lockForUpdate()
+                ->first();
+            if (!$adjustment || !in_array((string) $adjustment->status, ['pending_payment', 'proof_rejected'], true)) {
+                throw ValidationException::withMessages([
+                    'adjustment' => ['فرق الدفع غير موجود أو لا يقبل إيصالاً جديداً حالياً.'],
+                ]);
+            }
+
+            $invoice = Invoice::query()
+                ->where('booking_id', $bookingId)
+                ->where('source_type', 'venue_booking')
+                ->latest('id')
+                ->firstOrFail();
+            if ((int) $invoice->customer_id !== (int) $customer->id) {
+                abort(403);
+            }
+            if (PaymentProof::query()->where('payment_adjustment_id', $adjustmentId)->where('status', 'pending')->exists()) {
+                throw ValidationException::withMessages(['adjustment' => ['يوجد إيصال فرق دفع قيد المراجعة بالفعل.']]);
+            }
+
+            $method = PaymentMethod::query()
+                ->whereKey($data['payment_method_id'])
+                ->where('is_active', true)
+                ->whereIn('slug', config('salora_payments.allowed_method_slugs', []))
+                ->firstOrFail();
+            $account = PayoutAccount::query()
+                ->whereKey($data['payout_account_id'])
+                ->where('user_id', $invoice->payee_id)
+                ->where('payment_method_id', $method->id)
+                ->where('is_active', true)
+                ->firstOrFail();
+
+            $reference = trim((string) ($data['transaction_reference'] ?? ''));
+            if ($reference !== '' && PaymentProof::query()
+                ->where('payout_account_id', $account->id)
+                ->where('transaction_reference', $reference)
+                ->whereIn('status', ['pending', 'approved'])
+                ->exists()) {
+                throw ValidationException::withMessages([
+                    'transaction_reference' => ['رقم العملية مستخدم مسبقاً لدى نفس المستلم.'],
+                ]);
+            }
+
+            $path = $image->store('payment-proofs/'.now()->format('Y/m'), 'local');
+            $attempt = ((int) PaymentProof::query()->where('payment_adjustment_id', $adjustmentId)->max('attempt_no')) + 1;
+            $proof = PaymentProof::create([
+                'booking_id' => $bookingId,
+                'invoice_id' => $invoice->id,
+                'payment_adjustment_id' => $adjustmentId,
+                'customer_id' => $customer->id,
+                'owner_id' => $invoice->payee_id,
+                'image_url' => $path,
+                'amount_syp' => $adjustment->amount_syp,
+                'amount_usd' => $adjustment->amount_usd,
+                'payment_method' => $method->slug,
+                'payment_method_id' => $method->id,
+                'payout_account_id' => $account->id,
+                'sender_name' => trim((string) $data['sender_name']),
+                'transaction_reference' => $reference !== '' ? $reference : null,
+                'transferred_at' => $data['transferred_at'] ?? now(),
+                'customer_notes' => $data['customer_notes'] ?? null,
+                'status' => 'pending',
+                'attempt_no' => $attempt,
+                'uploaded_at' => now(),
+            ]);
+
+            PaymentTransaction::create([
+                'invoice_id' => $invoice->id,
+                'payment_proof_id' => $proof->id,
+                'method' => 'manual_transfer',
+                'reference' => $reference !== '' ? $reference : 'ADJ-'.strtoupper(Str::uuid()->toString()),
+                'amount' => (float) $adjustment->amount_syp,
+                'currency' => 'SYP',
+                'status' => 'pending',
+                'metadata' => [
+                    'payment_adjustment_id' => $adjustmentId,
+                    'payment_method_id' => $method->id,
+                    'payout_account_id' => $account->id,
+                ],
+            ]);
+
+            DB::table('salora_booking_payment_adjustments')->where('id', $adjustmentId)->update([
+                'status' => 'proof_uploaded',
+                'payment_proof_id' => $proof->id,
+                'updated_at' => now(),
+            ]);
+
+            NotificationService::send(
+                (int) $invoice->payee_id,
+                'تم رفع إثبات فرق دفع',
+                'رفع العميل إثبات دفع فرق بقيمة '.number_format((float) $adjustment->amount_syp, 0, '.', ',').' ل.س للحجز رقم '.$bookingId.'.',
+                'booking_change_adjustment_proof_uploaded',
+                [
+                    'event' => 'booking_change_adjustment_proof_uploaded',
+                    'booking_id' => (string) $bookingId,
+                    'payment_adjustment_id' => (string) $adjustmentId,
+                    'payment_proof_id' => (string) $proof->id,
+                    'target_route' => 'business_payments',
+                ],
+            );
+
+            return $proof->fresh(['invoice', 'method', 'payoutAccount', 'transaction']);
         });
     }
 
@@ -284,6 +408,17 @@ class PaymentWorkflowService
 
             if ((int) $invoice->payee_id !== (int) $reviewer->id) {
                 abort(403);
+            }
+
+            if (!empty($locked->payment_adjustment_id)) {
+                return $this->reviewAdjustmentProof($reviewer, $locked, $approve, $reason);
+            }
+
+            $this->assertInvoiceSourceActive($invoice);
+            if ($invoice->status !== 'proof_uploaded') {
+                throw ValidationException::withMessages([
+                    'payment' => ['الفاتورة لم تعد بانتظار مراجعة هذا الإيصال.'],
+                ]);
             }
 
             if ($approve) {
@@ -366,19 +501,10 @@ class PaymentWorkflowService
 
                 $this->invoices->rejectProof($locked, $reason);
 
-                $retryHours = $invoice->source_type === 'venue_booking'
-                    ? VenueAvailabilityService::PENDING_HOLD_HOURS
-                    : (int) config(
-                        'salora_payments.payment_deadline_hours',
-                        6,
-                    );
-
-                $retryDeadline = now()->addHours($retryHours);
-
                 $invoice->update([
                     'status' => 'unpaid',
-                    'due_at' => $retryDeadline,
-                    'payment_deadline_at' => $retryDeadline,
+                    'due_at' => null,
+                    'payment_deadline_at' => null,
                     'payment_reminder_sent_at' => null,
                     'review_deadline_at' => null,
                     'review_reminder_sent_at' => null,
@@ -397,7 +523,7 @@ class PaymentWorkflowService
                         [
                             'payment_status' =>
                                 SaloraStatus::PAYMENT_REJECTED,
-                            'expires_at' => $retryDeadline,
+                            'expires_at' => null,
                         ],
                     );
                 }
@@ -409,7 +535,7 @@ class PaymentWorkflowService
                             'payment_status' => 'rejected',
                             'payment_reviewed_at' => now(),
                             'payment_rejection_reason' => $reason,
-                            'payment_deadline_at' => $retryDeadline,
+                            'payment_deadline_at' => null,
                         ]);
                 }
 
@@ -419,7 +545,7 @@ class PaymentWorkflowService
                         ? 'تم رفض إيصال دفع الخدمة'
                         : 'تم رفض إيصال دفع الصالة',
                     'السبب: '.$reason.
-                        '. يمكنك رفع إيصال جديد قبل انتهاء المهلة.',
+                        '. يمكنك رفع إيصال جديد في أي وقت ما دامت العملية فعالة.',
                     'payment_rejected',
                     [
                         'invoice_id' => $invoice->id,
@@ -447,6 +573,106 @@ class PaymentWorkflowService
                 'transaction',
             ]);
         });
+    }
+
+    private function reviewAdjustmentProof(
+        User $reviewer,
+        PaymentProof $proof,
+        bool $approve,
+        ?string $reason,
+    ): PaymentProof {
+        $adjustment = DB::table('salora_booking_payment_adjustments')
+            ->where('id', $proof->payment_adjustment_id)
+            ->lockForUpdate()
+            ->first();
+        if (!$adjustment) {
+            throw ValidationException::withMessages(['adjustment' => ['فرق الدفع المرتبط غير موجود.']]);
+        }
+
+        if ($approve) {
+            $proof->update([
+                'status' => 'approved',
+                'reviewer_id' => $reviewer->id,
+                'reviewer_role' => $reviewer->role,
+                'reviewed_at' => now(),
+                'rejection_reason' => null,
+            ]);
+            $proof->transaction?->update(['status' => 'paid', 'processed_at' => now()]);
+            $this->modifications->finalizePaidAdjustment((int) $adjustment->id, (int) $reviewer->id);
+        } else {
+            if (trim((string) $reason) === '') {
+                throw ValidationException::withMessages(['reason' => ['سبب الرفض مطلوب.']]);
+            }
+            $proof->update([
+                'status' => 'rejected',
+                'reviewer_id' => $reviewer->id,
+                'reviewer_role' => $reviewer->role,
+                'reviewed_at' => now(),
+                'rejection_reason' => $reason,
+            ]);
+            $proof->transaction?->update(['status' => 'failed', 'processed_at' => now()]);
+            DB::table('salora_booking_payment_adjustments')->where('id', $adjustment->id)->update([
+                'status' => 'pending_payment',
+                'payment_proof_id' => null,
+                'updated_at' => now(),
+            ]);
+            NotificationService::send(
+                (int) $proof->customer_id,
+                'تم رفض إثبات فرق الدفع',
+                'السبب: '.$reason.'. يمكنك رفع إثبات جديد في أي وقت.',
+                'booking_change_adjustment_proof_rejected',
+                [
+                    'event' => 'booking_change_adjustment_proof_rejected',
+                    'booking_id' => (string) $proof->booking_id,
+                    'payment_adjustment_id' => (string) $adjustment->id,
+                    'target_route' => 'booking_details',
+                ],
+            );
+        }
+
+        return $proof->fresh(['invoice.customer', 'invoice.payee', 'method', 'payoutAccount', 'reviewer', 'transaction']);
+    }
+
+    public function canAcceptPayment(Invoice $invoice): bool
+    {
+        $invoice->loadMissing(['booking', 'providerServiceRequest']);
+        if ($invoice->status !== 'unpaid') {
+            return false;
+        }
+
+        try {
+            $this->assertInvoiceSourceActive($invoice);
+            return true;
+        } catch (ValidationException) {
+            return false;
+        }
+    }
+
+    private function assertInvoiceSourceActive(Invoice $invoice): void
+    {
+        $invoice->loadMissing(['booking', 'providerServiceRequest']);
+
+        if ($invoice->source_type === 'venue_booking') {
+            $booking = $invoice->booking;
+            $bookingStatus = strtolower((string) ($booking?->booking_status ?? ''));
+            $cancellationStatus = strtolower((string) ($booking?->cancellation_status ?? ''));
+            if (!$booking || in_array($cancellationStatus, ['waiting_refund', 'cancelled'], true)
+                || in_array($bookingStatus, ['cancellation_pending_refund', 'cancelled', 'owner_rejected', 'rejected', 'expired', 'completed'], true)) {
+                throw ValidationException::withMessages([
+                    'invoice' => ['الحجز المرتبط بهذه الفاتورة لم يعد فعالاً ولا يمكن تسجيل دفعة عليه.'],
+                ]);
+            }
+        }
+
+        if ($invoice->source_type === 'provider_service') {
+            $providerRequest = $invoice->providerServiceRequest;
+            $status = strtolower((string) ($providerRequest?->status ?? ''));
+            if (!$providerRequest || in_array($status, ['cancelled', 'rejected', 'completed'], true)) {
+                throw ValidationException::withMessages([
+                    'invoice' => ['طلب الخدمة المرتبط بهذه الفاتورة لم يعد فعالاً ولا يمكن تسجيل دفعة عليه.'],
+                ]);
+            }
+        }
     }
 
     private function amountLabel(Invoice $invoice): string
