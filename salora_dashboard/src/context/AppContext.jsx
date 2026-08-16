@@ -48,7 +48,7 @@ const eventEmoji = {
 
 
 const arabicLabel = (value = "") => ({
-  Approved: "مقبول", Pending: "قيد المراجعة", Rejected: "مرفوض", Active: "فعال", Disabled: "معطل", Inactive: "غير نشط", Suspended: "مجمّد", Locked: "مقفول مؤقتاً", Deleted: "محذوف", Visible: "ظاهر", Hidden: "مخفي", Open: "مفتوحة", "In Progress": "قيد المعالجة", Answered: "تم الرد", Resolved: "تم الرد والحل", Closed: "مغلقة", Confirmed: "مؤكد", Completed: "مؤكد", Expired: "منتهي سابقًا", Cancelled: "ملغي", "Pending Owner Review": "بانتظار الدفع", "Pending Payment": "بانتظار الدفع", "Owner Approved": "بانتظار الدفع", "Modification Requested": "طلب تعديل قيد المراجعة", "Cancellation Requested": "طلب إلغاء قيد المراجعة", Verified: "مدفوع ومقبول", "Pending Admin Verification": "بانتظار مراجعة المالك للدفع", "Payment Under Review": "قيد مراجعة الدفع", "Proof Uploaded": "تم رفع الإثبات", "Not Uploaded": "لم يتم رفع الإثبات", Unpaid: "غير مدفوع", "Rejected Proof": "إثبات الدفع مرفوض", "Re-upload Requested": "مطلوب إعادة رفع الإثبات", Refunded: "مسترد", Customer: "عميل", Owner: "مالك صالة", Provider: "مقدم خدمة", Admin: "مدير النظام", Wedding: "زفاف", Engagement: "خطوبة", Graduation: "تخرج", Birthday: "عيد ميلاد", "Family Event": "مناسبة عائلية", "Birthday / Family Event": "عيد ميلاد / مناسبة عائلية", Condolence: "عزاء", Conference: "مؤتمر", Meeting: "اجتماع", "Included Hall Service": "خدمة مجانية ضمن الصالة", "Paid Hall Upgrade": "خدمة مدفوعة إضافية", "External Vendor Service": "خدمة من مقدم خارجي", Lighting: "إضاءة", Catering: "ضيافة", تصوير: "تصوير", Service: "خدمة"
+  Approved: "مقبول", Pending: "قيد المراجعة", Rejected: "مرفوض", Active: "فعال", Disabled: "معطل", Inactive: "غير نشط", Suspended: "مجمّد", Locked: "مقفول مؤقتاً", Deleted: "محذوف", Visible: "ظاهر", Hidden: "مخفي", Open: "مفتوحة", "In Progress": "قيد المعالجة", Answered: "تم الرد", Resolved: "تم الرد والحل", Closed: "مغلقة", Confirmed: "مؤكد", Completed: "مؤكد", Expired: "منتهي سابقًا", Cancelled: "ملغي", "Pending Owner Review": "بانتظار الدفع", "Pending Payment": "بانتظار الدفع", "Owner Approved": "بانتظار الدفع", "Modification Requested": "طلب تعديل قيد المراجعة", "Cancellation Requested": "طلب إلغاء قيد المراجعة", Verified: "مدفوع ومقبول", "Pending Admin Verification": "بانتظار مراجعة المالك للدفع", "Payment Under Review": "قيد مراجعة الدفع", "Proof Uploaded": "تم رفع الإثبات", "Not Uploaded": "لم يتم رفع الإثبات", Unpaid: "غير مدفوع", "Rejected Proof": "إثبات الدفع مرفوض", "Re-upload Requested": "مطلوب إعادة رفع الإثبات", Refunded: "مسترد", Customer: "عميل", Owner: "مالك صالة", Provider: "مقدم خدمة", Admin: "مدير النظام", High: "مرتفعة", Medium: "متوسطة", Low: "منخفضة", Wedding: "زفاف", Engagement: "خطوبة", Graduation: "تخرج", Birthday: "عيد ميلاد", "Family Event": "مناسبة عائلية", "Birthday / Family Event": "عيد ميلاد / مناسبة عائلية", Condolence: "عزاء", Conference: "مؤتمر", Meeting: "اجتماع", "Included Hall Service": "خدمة مجانية ضمن الصالة", "Paid Hall Upgrade": "خدمة مدفوعة إضافية", "External Vendor Service": "خدمة من مقدم خارجي", Lighting: "إضاءة", Catering: "ضيافة", تصوير: "تصوير", Service: "خدمة"
 }[value] || value);
 
 const serviceEmoji = {
@@ -415,6 +415,7 @@ export function AppProvider({ children }) {
   const [backendError, setBackendError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [reportData, setReportData] = useState(null);
+  const [exchangeRate, setExchangeRate] = useState(14000);
   const [users, setUsers] = useState([]);
   const [venues, setVenues] = useState([]);
   const [bookings, setBookings] = useState([]);
@@ -468,6 +469,7 @@ export function AppProvider({ children }) {
     setAdminNotifications([]);
     setOwnerNotifications([]);
     setReportData(null);
+    setExchangeRate(14000);
   };
 
   const logout = async () => {
@@ -486,6 +488,28 @@ export function AppProvider({ children }) {
   };
 
   const refreshData = () => setRefreshKey((value) => value + 1);
+
+  const updateExchangeRate = async (value) => {
+    const numericRate = Number(value);
+    if (!Number.isFinite(numericRate) || numericRate < 1 || numericRate > 1000000000) {
+      window.alert("أدخل سعر صرف صحيحاً أكبر من صفر.");
+      return null;
+    }
+
+    try {
+      const result = await dashboardApi.admin.updateSettings({
+        key: "exchange_rate_usd_to_syp",
+        value: String(numericRate),
+        type: "number",
+      });
+      const savedRate = Number(result?.exchange_rate_usd_to_syp ?? result?.setting?.value ?? numericRate);
+      setExchangeRate(Number.isFinite(savedRate) && savedRate > 0 ? savedRate : numericRate);
+      refreshData();
+      return result;
+    } catch (error) {
+      return showMutationError(error, "تعذر حفظ سعر الصرف.");
+    }
+  };
 
   const updateCurrentProfile = async (payload) => {
     try {
@@ -634,6 +658,11 @@ export function AppProvider({ children }) {
             setProviders(mappedUsers.filter((user) => user.role === ROLES.PROVIDER));
           }),
           load("طلبات الانضمام", dashboardApi.admin.ownerRequests, (value) => setOwnerRequests(asArray(value).map(ownerRequestFromApi))),
+          load("الإعدادات", dashboardApi.admin.settings, (value) => {
+            const settings = asArray(value);
+            const rate = Number(settings.find((item) => item.key === "exchange_rate_usd_to_syp")?.value || 14000);
+            setExchangeRate(Number.isFinite(rate) && rate > 0 ? rate : 14000);
+          }),
           load("سجل النشاط", dashboardApi.admin.activity, (value) => setActivityLog(asArray(value).map((item) => ({
             id: String(item.id),
             actor: item.user?.name || item.role || "System",
@@ -1619,7 +1648,8 @@ export function AppProvider({ children }) {
     formatUsd,
     formatSyp,
     formatPricePair,
-    exchangeRate: null,
+    exchangeRate,
+    updateExchangeRate,
     eventEmoji,
     serviceEmoji,
     arabicLabel,

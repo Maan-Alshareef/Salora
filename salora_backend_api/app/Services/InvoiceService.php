@@ -11,6 +11,8 @@ use Illuminate\Support\Str;
 
 class InvoiceService
 {
+    public function __construct(private readonly ExchangeRateService $exchangeRates) {}
+
     public function createForBooking(Booking $booking): Invoice
     {
         $invoice = Invoice::query()
@@ -23,18 +25,23 @@ class InvoiceService
             ->where('source_type', 'venue_booking')
             ->first();
 
-        $invoice ??= new Invoice();
+        if ($invoice && $this->isFinancialSnapshotLocked($invoice)) {
+            return $invoice->fresh();
+        }
 
-        $deadline = null;
+        $invoice ??= new Invoice();
+        $rate = $this->exchangeRates->resolveSnapshotRate(
+            $booking->exchange_rate_syp_per_usd ?? null,
+            $booking->total_syp,
+            $booking->total_usd,
+        );
 
         $invoice->fill(
-            $this->amounts(
+            $this->amountsFromSyp(
                 (float) $booking->subtotal_syp,
-                (float) $booking->subtotal_usd,
                 (float) $booking->discount_syp,
-                (float) $booking->discount_usd,
                 (float) $booking->total_syp,
-                (float) $booking->total_usd,
+                $rate,
             ) + [
                 'invoice_number' => $invoice->invoice_number ?: $this->number('REQ'),
                 'booking_id' => $booking->id,
@@ -42,7 +49,8 @@ class InvoiceService
                 'payee_id' => $booking->owner_id,
                 'source_type' => 'venue_booking',
                 'source_id' => $booking->id,
-                'currency' => $booking->currency,
+                'currency' => $booking->currency ?: 'SYP',
+                'exchange_rate_syp_per_usd' => $rate,
                 'status' => $invoice->status ?: 'unpaid',
                 'due_at' => null,
                 'payment_deadline_at' => null,
@@ -72,21 +80,35 @@ class InvoiceService
             ->where('source_id', $request->id)
             ->first();
 
-        $invoice ??= new Invoice();
+        if ($invoice && $this->isFinancialSnapshotLocked($invoice)) {
+            $this->syncRequestInvoiceReference($request, $invoice);
+            return $invoice->fresh();
+        }
 
+        $invoice ??= new Invoice();
         $syp = (float) $request->price_syp;
-        $usd = (float) $request->price_usd;
-        $deadline = null;
+        $rate = $this->exchangeRates->resolveSnapshotRate(
+            $request->exchange_rate_syp_per_usd ?? null,
+            $request->price_syp,
+            $request->price_usd,
+        );
+        $usd = $this->exchangeRates->toUsd($syp, $rate);
+
+        $request->forceFill([
+            'price_usd' => $usd,
+            'exchange_rate_syp_per_usd' => $rate,
+        ])->save();
 
         $invoice->fill(
-            $this->amounts($syp, $usd, 0, 0, $syp, $usd) + [
+            $this->amountsFromSyp($syp, 0, $syp, $rate) + [
                 'invoice_number' => $invoice->invoice_number ?: $this->number('SRV'),
                 'booking_id' => $request->booking_id,
                 'customer_id' => $request->customer_id,
                 'payee_id' => $request->provider_id,
                 'source_type' => 'provider_service',
                 'source_id' => $request->id,
-                'currency' => $syp > 0 ? 'SYP' : 'USD',
+                'currency' => 'SYP',
+                'exchange_rate_syp_per_usd' => $rate,
                 'status' => $invoice->status ?: 'unpaid',
                 'due_at' => null,
                 'payment_deadline_at' => null,
@@ -101,23 +123,7 @@ class InvoiceService
         }
 
         $invoice->save();
-
-        $invoiceStatus = strtolower((string) $invoice->status);
-        $requestPaymentStatus = strtolower((string) ($request->payment_status ?? 'unpaid'));
-        $resolvedPaymentStatus = match ($invoiceStatus) {
-            'paid' => 'approved',
-            'proof_uploaded' => 'proof_uploaded',
-            default => $requestPaymentStatus === 'rejected' ? 'rejected' : 'unpaid',
-        };
-
-        $request->forceFill([
-            'invoice_id' => $invoice->id,
-            'invoice_number' => $invoice->invoice_number,
-            // Never downgrade proof_uploaded back to unpaid just because the
-            // invoice was re-opened while the provider is reviewing the proof.
-            'payment_status' => $resolvedPaymentStatus,
-            'payment_deadline_at' => null,
-        ])->save();
+        $this->syncRequestInvoiceReference($request, $invoice);
 
         return $invoice->fresh();
     }
@@ -201,30 +207,51 @@ class InvoiceService
         ]);
     }
 
-    private function amounts(
+    private function amountsFromSyp(
         float $subtotalSyp,
-        float $subtotalUsd,
         float $discountSyp,
-        float $discountUsd,
         float $totalSyp,
-        float $totalUsd,
+        float $exchangeRate,
     ): array {
-        $rate = (float) config('salora_payments.commission_percent', 10) / 100;
-        $commissionSyp = round($totalSyp * $rate, 2);
-        $commissionUsd = round($totalUsd * $rate, 2);
+        $commissionRate = (float) config('salora_payments.commission_percent', 10) / 100;
+        $commissionSyp = round($totalSyp * $commissionRate, 2);
+        $netSyp = max(0, round($totalSyp - $commissionSyp, 2));
 
         return [
             'subtotal_syp' => $subtotalSyp,
-            'subtotal_usd' => $subtotalUsd,
+            'subtotal_usd' => $this->exchangeRates->toUsd($subtotalSyp, $exchangeRate),
             'discount_syp' => $discountSyp,
-            'discount_usd' => $discountUsd,
+            'discount_usd' => $this->exchangeRates->toUsd($discountSyp, $exchangeRate),
             'total_syp' => $totalSyp,
-            'total_usd' => $totalUsd,
+            'total_usd' => $this->exchangeRates->toUsd($totalSyp, $exchangeRate),
             'commission_syp' => $commissionSyp,
-            'commission_usd' => $commissionUsd,
-            'net_syp' => max(0, $totalSyp - $commissionSyp),
-            'net_usd' => max(0, $totalUsd - $commissionUsd),
+            'commission_usd' => $this->exchangeRates->toUsd($commissionSyp, $exchangeRate),
+            'net_syp' => $netSyp,
+            'net_usd' => $this->exchangeRates->toUsd($netSyp, $exchangeRate),
         ];
+    }
+
+    private function syncRequestInvoiceReference(ProviderServiceRequest $request, Invoice $invoice): void
+    {
+        $invoiceStatus = strtolower((string) $invoice->status);
+        $requestPaymentStatus = strtolower((string) ($request->payment_status ?? 'unpaid'));
+        $resolvedPaymentStatus = match ($invoiceStatus) {
+            'paid' => 'approved',
+            'proof_uploaded' => 'proof_uploaded',
+            default => $requestPaymentStatus === 'rejected' ? 'rejected' : 'unpaid',
+        };
+
+        $request->forceFill([
+            'invoice_id' => $invoice->id,
+            'invoice_number' => $invoice->invoice_number,
+            'payment_status' => $resolvedPaymentStatus,
+            'payment_deadline_at' => null,
+        ])->save();
+    }
+
+    private function isFinancialSnapshotLocked(Invoice $invoice): bool
+    {
+        return in_array(strtolower((string) $invoice->status), ['proof_uploaded', 'paid', 'refund_pending', 'refunded', 'cancelled'], true);
     }
 
     private function number(string $prefix): string

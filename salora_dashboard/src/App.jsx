@@ -26,6 +26,7 @@ import UsersManagement from "./pages/UsersManagement";
 import ReportsPage from "./pages/ReportsPage";
 import ActivityLog from "./pages/ActivityLog";
 import NotificationsPage from "./pages/NotificationsPage";
+import SettingsPage from "./pages/SettingsPage";
 import ReviewsManagement from "./pages/ReviewsManagement";
 import ServiceCategoriesManagement from "./pages/ServiceCategoriesManagement";
 import VenueRevisionsPage from "./pages/VenueRevisionsPage";
@@ -103,6 +104,7 @@ export default function App() {
         <Route path="/admin/reports" element={<ProtectedDashboard role={ROLES.ADMIN}><ReportsPage /></ProtectedDashboard>} />
         <Route path="/admin/activity" element={<ProtectedDashboard role={ROLES.ADMIN}><ActivityLog /></ProtectedDashboard>} />
         <Route path="/admin/notifications" element={<ProtectedDashboard role={ROLES.ADMIN}><NotificationsPage /></ProtectedDashboard>} />
+        <Route path="/admin/settings" element={<ProtectedDashboard role={ROLES.ADMIN}><SettingsPage /></ProtectedDashboard>} />
         <Route path="/admin/profile" element={<ProtectedDashboard role={ROLES.ADMIN}><OwnerProfile /></ProtectedDashboard>} />
 
         <Route path="/owner" element={<ProtectedDashboard role={ROLES.OWNER}><OwnerDashboard /></ProtectedDashboard>} />

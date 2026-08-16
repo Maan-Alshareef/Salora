@@ -11,6 +11,8 @@ use Illuminate\Validation\ValidationException;
 
 class SaloraBookingV2Service
 {
+    public function __construct(private readonly ExchangeRateService $exchangeRates) {}
+
     private ?string $venueTableCache = null;
     private ?string $bookingTableCache = null;
 
@@ -800,6 +802,14 @@ public function workingWindows(int $venueId, Carbon $referenceDate): array
             }
 
             if ($paid && $refund > 0 && !empty($providerRequest->invoice_id) && Schema::hasTable('payment_refunds')) {
+                $invoiceSnapshot = Schema::hasTable('invoices')
+                    ? DB::table('invoices')->where('id', $providerRequest->invoice_id)->first()
+                    : null;
+                $refundExchangeRate = $this->exchangeRates->resolveSnapshotRate(
+                    $invoiceSnapshot->exchange_rate_syp_per_usd ?? null,
+                    $invoiceSnapshot->total_syp ?? $providerRequest->price_syp ?? null,
+                    $invoiceSnapshot->total_usd ?? $providerRequest->price_usd ?? null,
+                );
                 $exists = DB::table('payment_refunds')
                     ->where('invoice_id', $providerRequest->invoice_id)
                     ->where('reason', 'customer_booking_cancelled')
@@ -811,7 +821,7 @@ public function workingWindows(int $venueId, Carbon $referenceDate): array
                         'customer_id' => $providerRequest->customer_id,
                         'payee_id' => $providerRequest->provider_id,
                         'amount_syp' => $refund,
-                        'amount_usd' => 0,
+                        'amount_usd' => $this->exchangeRates->toUsd($refund, $refundExchangeRate),
                         'refund_percent' => $refundPercent,
                         'status' => 'pending',
                         'requested_by_role' => 'customer',
@@ -1369,16 +1379,18 @@ public function workingWindows(int $venueId, Carbon $referenceDate): array
         $newSubtotalSyp = round($quote['price_before_discount_syp'] + $extraServicesSyp, 2);
         $newTotalSyp = round($quote['final_price_syp'] + $extraServicesSyp, 2);
 
-        $usdToSyp = 0.0;
-        if (!empty($booking->total_usd) && (float) $booking->total_usd > 0 && $oldTotalSyp > 0) {
-            $usdToSyp = $oldTotalSyp / (float) $booking->total_usd;
-        }
-        if ($usdToSyp <= 0) {
-            $usdToSyp = max(1, (float) env('USD_TO_SYP', 14000));
-        }
-        $newSubtotalUsd = round($newSubtotalSyp / $usdToSyp, 2);
-        $newDiscountUsd = round($quote['discount_syp'] / $usdToSyp, 2);
-        $newTotalUsd = round($newTotalSyp / $usdToSyp, 2);
+        $usdToSyp = $this->bookingHasLockedInvoice($bookingId)
+            ? $this->exchangeRates->resolveSnapshotRate(
+                $booking->exchange_rate_syp_per_usd ?? null,
+                $oldTotalSyp,
+                $booking->total_usd ?? null,
+            )
+            : $this->exchangeRates->rate();
+        $newSubtotalUsd = $this->exchangeRates->toUsd($newSubtotalSyp, $usdToSyp);
+        $newDiscountUsd = $this->exchangeRates->toUsd($quote['discount_syp'], $usdToSyp);
+        $newTotalUsd = $this->exchangeRates->toUsd($newTotalSyp, $usdToSyp);
+        $newCommissionUsd = $this->exchangeRates->toUsd($quote['commission_syp'], $usdToSyp);
+        $newOwnerNetUsd = $this->exchangeRates->toUsd($newTotalSyp - $quote['commission_syp'], $usdToSyp);
 
         $updates = $this->filterColumns($table, [
             'venue_id' => $venueId,
@@ -1410,13 +1422,16 @@ public function workingWindows(int $venueId, Carbon $referenceDate): array
             'discount_usd' => $newDiscountUsd,
             'total_syp' => $newTotalSyp,
             'total_usd' => $newTotalUsd,
+            'exchange_rate_syp_per_usd' => $usdToSyp,
             'final_price_syp' => $quote['final_price_syp'],
             'owner_retained_syp' => $quote['final_price_syp'],
             'commission_rate' => $quote['commission_rate'],
             'commission_syp' => $quote['commission_syp'],
             'platform_commission_rate' => $quote['commission_rate'],
             'platform_commission_syp' => $quote['commission_syp'],
+            'platform_commission_usd' => $newCommissionUsd,
             'owner_net_syp' => round($newTotalSyp - $quote['commission_syp'], 2),
+            'owner_net_usd' => $newOwnerNetUsd,
             'pricing_snapshot' => json_encode($quote, JSON_UNESCAPED_UNICODE),
             'financial_status' => 'updated_after_booking_change',
         ]);
@@ -1445,6 +1460,8 @@ public function workingWindows(int $venueId, Carbon $referenceDate): array
             $newDiscountUsd,
             $newTotalSyp,
             $newTotalUsd,
+            $newCommissionUsd,
+            $newOwnerNetUsd,
             $oldHallPrice,
             $oldInvoiceTotal,
             $wasPaid,
@@ -1480,8 +1497,11 @@ public function workingWindows(int $venueId, Carbon $referenceDate): array
                     'discount_usd' => $newDiscountUsd,
                     'total_syp' => $newTotalSyp,
                     'total_usd' => $newTotalUsd,
+                    'exchange_rate_syp_per_usd' => $usdToSyp,
                     'commission_syp' => $quote['commission_syp'],
+                    'commission_usd' => $newCommissionUsd,
                     'net_syp' => round($newTotalSyp - $quote['commission_syp'], 2),
+                    'net_usd' => $newOwnerNetUsd,
                     'updated_at' => now(),
                 ]);
                 if ($invoiceUpdates !== []) {
@@ -1616,7 +1636,7 @@ public function workingWindows(int $venueId, Carbon $referenceDate): array
         $type = $difference > 0 ? 'additional_payment' : 'refund_due';
         $status = $difference > 0 ? 'pending_payment' : 'pending_refund';
         $amountSyp = abs($difference);
-        $amountUsd = round($amountSyp / max(1, $usdToSyp), 2);
+        $amountUsd = $this->exchangeRates->toUsd($amountSyp, $usdToSyp);
         $now = now();
 
         $id = DB::table('salora_booking_payment_adjustments')->insertGetId([
@@ -1633,6 +1653,7 @@ public function workingWindows(int $venueId, Carbon $referenceDate): array
                 'reason' => 'booking_change_approved',
                 'quote' => $quote,
                 'actor_user_id' => $actorUserId,
+                'exchange_rate_syp_per_usd' => $usdToSyp,
             ], JSON_UNESCAPED_UNICODE),
             'created_at' => $now,
             'updated_at' => $now,
@@ -1814,4 +1835,20 @@ public function workingWindows(int $venueId, Carbon $referenceDate): array
             'updated_at' => now(),
         ]);
     }
+    private function bookingHasLockedInvoice(int $bookingId): bool
+    {
+        if (!Schema::hasTable('invoices')) {
+            return false;
+        }
+
+        return DB::table('invoices')
+            ->where('booking_id', $bookingId)
+            ->when(
+                Schema::hasColumn('invoices', 'source_type'),
+                fn ($query) => $query->where('source_type', 'venue_booking')
+            )
+            ->whereIn('status', ['proof_uploaded', 'paid', 'refund_pending', 'refunded', 'cancelled'])
+            ->exists();
+    }
+
 }

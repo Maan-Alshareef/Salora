@@ -15,7 +15,7 @@ class Event extends Model
     ];
 
     protected $casts = [
-        'event_date' => 'date',
+        'event_date' => 'date:Y-m-d',
         'budget_syp' => 'decimal:2',
         'budget_usd' => 'decimal:2',
     ];

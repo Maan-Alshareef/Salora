@@ -15,18 +15,28 @@ class Booking extends Model
         'event_name', 'host_name', 'event_date', 'start_time', 'end_time', 'guests_count',
         'notes', 'rejection_reason', 'booking_status', 'payment_status', 'subtotal_syp',
         'subtotal_usd', 'discount_syp', 'discount_usd', 'total_syp', 'total_usd', 'currency',
+        'exchange_rate_syp_per_usd',
         'owner_decision_at', 'admin_payment_decision_at',
+        'platform_commission_rate', 'platform_commission_syp', 'platform_commission_usd',
+        'owner_net_syp', 'owner_net_usd', 'commission_status', 'commission_collected_at', 'commission_notes',
         'expires_at',
     ];
 
     protected $casts = [
-        'event_date' => 'date',
+        'event_date' => 'date:Y-m-d',
         'owner_decision_at' => 'datetime',
         'admin_payment_decision_at' => 'datetime',
         'expires_at' => 'datetime',
         'subtotal_syp' => 'decimal:2', 'subtotal_usd' => 'decimal:2',
         'discount_syp' => 'decimal:2', 'discount_usd' => 'decimal:2',
         'total_syp' => 'decimal:2', 'total_usd' => 'decimal:2',
+        'exchange_rate_syp_per_usd' => 'decimal:4',
+        'platform_commission_rate' => 'decimal:2',
+        'platform_commission_syp' => 'decimal:2',
+        'platform_commission_usd' => 'decimal:2',
+        'owner_net_syp' => 'decimal:2',
+        'owner_net_usd' => 'decimal:2',
+        'commission_collected_at' => 'datetime',
     ];
 
     protected $hidden = ['expires_at', 'hold_expires_at'];

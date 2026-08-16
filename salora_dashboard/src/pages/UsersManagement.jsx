@@ -3,6 +3,7 @@ import { useApp } from "../context/AppContext";
 import { dashboardApi } from "../services/apiClient";
 import { resolveMediaUrl } from "../utils/mediaUrl";
 import { generateTemporaryPassword, strongPasswordPattern } from "../utils/passwords";
+import { isValidSyrianPhone, normaliseSyrianPhone, syrianPhoneMessage } from "../utils/syrianPhone";
 
 const roleValue = (role) => role === "Owner" || role === "مالك صالة" ? "owner" : role === "Provider" || role === "مقدم خدمة" ? "provider" : role === "Admin" || role === "مدير النظام" ? "admin" : "customer";
 const resolveAssetUrl = resolveMediaUrl;
@@ -111,12 +112,20 @@ export default function UsersManagement() {
       setMessage("املأ الاسم والبريد ورقم الهاتف.");
       return;
     }
+    if (!isValidSyrianPhone(form.phone)) {
+      setMessage(syrianPhoneMessage);
+      return;
+    }
     if (!strongPasswordPattern.test(form.password)) {
       setMessage("كلمة المرور المؤقتة يجب أن تكون 8 أحرف على الأقل وتحوي حرفاً كبيراً وصغيراً ورقماً ورمزاً.");
       return;
     }
 
-    const created = await createUserAccount({ ...form, password_confirmation: form.password });
+    const created = await createUserAccount({
+      ...form,
+      phone: normaliseSyrianPhone(form.phone),
+      password_confirmation: form.password,
+    });
     if (!created) return;
     setMessage(`تم إنشاء الحساب. احفظ كلمة المرور المؤقتة الآن: ${form.password}`);
     setForm(emptyCreateForm());
@@ -125,6 +134,10 @@ export default function UsersManagement() {
   const saveEdit = async (event) => {
     event.preventDefault();
     if (!editUser) return;
+    if (!isValidSyrianPhone(editUser.phone)) {
+      setMessage(syrianPhoneMessage);
+      return;
+    }
     if (editUser.password && !strongPasswordPattern.test(editUser.password)) {
       setMessage("كلمة المرور الجديدة لا تحقق سياسة الأمان.");
       return;
@@ -132,6 +145,7 @@ export default function UsersManagement() {
     setBusyId(editUser.id);
     const saved = await updateUserAccount(editUser.id, {
       ...editUser,
+      phone: normaliseSyrianPhone(editUser.phone),
       password_confirmation: editUser.password
     });
     setBusyId("");
@@ -233,7 +247,7 @@ export default function UsersManagement() {
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="اسم المستخدم" required />
           <input className="ltr" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="email@example.com" required />
-          <input className="ltr" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="رقم الهاتف" required />
+          <input className="ltr" inputMode="numeric" maxLength={10} value={form.phone} onChange={(e) => setForm({ ...form, phone: normaliseSyrianPhone(e.target.value) })} placeholder="رقم الهاتف - 10 أرقام" required />
           <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
             <option value="owner">مالك صالة</option><option value="provider">مقدم خدمة</option><option value="customer">عميل</option><option value="admin">مدير النظام</option>
           </select>
@@ -259,7 +273,7 @@ export default function UsersManagement() {
                   <td className="px-5 py-4 text-center"><span className={`rounded-full border px-3 py-1 text-[11px] font-black ${statusClasses(user.status)}`}>{arabicLabel(user.status)}</span></td>
                   <td className="px-5 py-4"><div className="flex flex-wrap justify-center gap-2">
                     {tab === "deleted" ? <button disabled={busyId === user.id} onClick={() => restore(user)} className="rounded-lg bg-emerald-500/15 px-3 py-2 text-xs font-bold text-emerald-300 disabled:opacity-50">استعادة</button> : <>
-                      <button onClick={() => setEditUser({ ...user, role: roleValue(user.role), password: "" })} className="rounded-lg bg-blue-500/15 px-3 py-2 text-xs font-bold text-blue-300">تعديل</button>
+                      <button onClick={() => setEditUser({ ...user, phone: normaliseSyrianPhone(user.phone), role: roleValue(user.role), password: "" })} className="rounded-lg bg-blue-500/15 px-3 py-2 text-xs font-bold text-blue-300">تعديل</button>
                       {user.status !== "Active" ? <button disabled={busyId === user.id} onClick={() => activate(user)} className="rounded-lg bg-emerald-500/15 px-3 py-2 text-xs font-bold text-emerald-300 disabled:opacity-50">تنشيط</button> : <button disabled={busyId === user.id} onClick={() => deactivate(user)} className="rounded-lg bg-red-500/15 px-3 py-2 text-xs font-bold text-red-300 disabled:opacity-50">تعطيل</button>}
                       <button onClick={() => setSuspension({ user, until: "", reason: "" })} className="rounded-lg bg-amber-500/15 px-3 py-2 text-xs font-bold text-amber-300">تجميد مؤقت</button>
                       <button disabled={busyId === user.id} onClick={() => inspectDelete(user)} className="rounded-lg border border-red-400/20 px-3 py-2 text-xs font-bold text-red-300 disabled:opacity-50">حذف آمن</button>
@@ -273,7 +287,7 @@ export default function UsersManagement() {
         </div>
       </div>
 
-      {editUser && <div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/80 p-4 backdrop-blur"><form onSubmit={saveEdit} className="w-full max-w-xl space-y-4 rounded-3xl border border-blue-400/20 bg-slate-950 p-6"><div className="flex justify-between"><h3 className="text-xl font-black">تعديل الحساب</h3><button type="button" onClick={() => setEditUser(null)}>✕</button></div><input value={editUser.name} onChange={(e) => setEditUser({ ...editUser, name: e.target.value })} placeholder="الاسم" required /><input className="ltr" type="email" value={editUser.email} onChange={(e) => setEditUser({ ...editUser, email: e.target.value })} required /><input className="ltr" value={editUser.phone} onChange={(e) => setEditUser({ ...editUser, phone: e.target.value })} required /><select value={editUser.role} onChange={(e) => setEditUser({ ...editUser, role: e.target.value })}><option value="owner">مالك صالة</option><option value="provider">مقدم خدمة</option><option value="customer">عميل</option><option value="admin">مدير النظام</option></select><input className="ltr" type="password" value={editUser.password} onChange={(e) => setEditUser({ ...editUser, password: e.target.value })} placeholder="كلمة مرور جديدة (اختياري)" /><button disabled={busyId === editUser.id} className="w-full rounded-xl bg-blue-600 py-3 font-black disabled:opacity-50">حفظ التعديلات</button></form></div>}
+      {editUser && <div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/80 p-4 backdrop-blur"><form onSubmit={saveEdit} className="w-full max-w-xl space-y-4 rounded-3xl border border-blue-400/20 bg-slate-950 p-6"><div className="flex justify-between"><h3 className="text-xl font-black">تعديل الحساب</h3><button type="button" onClick={() => setEditUser(null)}>✕</button></div><input value={editUser.name} onChange={(e) => setEditUser({ ...editUser, name: e.target.value })} placeholder="الاسم" required /><input className="ltr" type="email" value={editUser.email} onChange={(e) => setEditUser({ ...editUser, email: e.target.value })} required /><input className="ltr" inputMode="numeric" maxLength={10} value={editUser.phone} onChange={(e) => setEditUser({ ...editUser, phone: normaliseSyrianPhone(e.target.value) })} required /><select value={editUser.role} onChange={(e) => setEditUser({ ...editUser, role: e.target.value })}><option value="owner">مالك صالة</option><option value="provider">مقدم خدمة</option><option value="customer">عميل</option><option value="admin">مدير النظام</option></select><input className="ltr" type="password" value={editUser.password} onChange={(e) => setEditUser({ ...editUser, password: e.target.value })} placeholder="كلمة مرور جديدة (اختياري)" /><button disabled={busyId === editUser.id} className="w-full rounded-xl bg-blue-600 py-3 font-black disabled:opacity-50">حفظ التعديلات</button></form></div>}
 
       {suspension && <div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/80 p-4 backdrop-blur"><form onSubmit={submitSuspension} className="w-full max-w-lg space-y-4 rounded-3xl border border-amber-400/20 bg-slate-950 p-6"><div className="flex justify-between"><div><h3 className="text-xl font-black">تجميد {suspension.user.name}</h3><p className="mt-1 text-xs text-slate-500">سيتم سحب الجلسات ومنع الدخول حتى الموعد المحدد.</p></div><button type="button" onClick={() => setSuspension(null)}>✕</button></div><input type="datetime-local" value={suspension.until} onChange={(e) => setSuspension({ ...suspension, until: e.target.value })} min={new Date(Date.now()+60000).toISOString().slice(0,16)} required /><textarea value={suspension.reason} onChange={(e) => setSuspension({ ...suspension, reason: e.target.value })} placeholder="سبب التجميد" rows="4" required /><button disabled={busyId === suspension.user.id} className="w-full rounded-xl bg-amber-500 py-3 font-black text-slate-950 disabled:opacity-50">تأكيد التجميد</button></form></div>}
 

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/validation/syrian_phone.dart';
 import '../../models/join_request_model.dart';
 import '../../models/service_category_model.dart';
 import '../../models/user_role.dart';
@@ -53,7 +54,7 @@ class _OwnerJoinScreenState extends State<OwnerJoinScreen> {
     final auth = context.read<AuthProvider>();
     if (auth.isLoggedIn && auth.role == UserRole.customer) {
       _name.text = auth.rawUserName;
-      _phone.text = auth.rawPhone;
+      _phone.text = SyrianPhone.normalize(auth.rawPhone);
     }
     if (context.read<ServiceProviderState>().categoryModels.isEmpty) {
       await context.read<ServiceProviderState>().loadDirectory();
@@ -126,7 +127,7 @@ class _OwnerJoinScreenState extends State<OwnerJoinScreen> {
             fullName: _name.text,
             businessEmail: _email.text,
             otp: _otp.text,
-            phone: _phone.text,
+            phone: SyrianPhone.normalize(_phone.text),
             city: _city.text,
             hallName: _hallName.text,
             address: _address.text,
@@ -229,8 +230,13 @@ class _OwnerJoinScreenState extends State<OwnerJoinScreen> {
                   TextFormField(
                     controller: _phone,
                     keyboardType: TextInputType.phone,
-                    decoration: const InputDecoration(labelText: 'رقم التواصل *'),
-                    validator: (value) => RegExp(r'^[0-9]{10}$').hasMatch(value?.trim() ?? '') ? null : 'أدخل رقماً سورياً من 10 أرقام',
+                    inputFormatters: SyrianPhone.formatters,
+                    maxLength: 10,
+                    decoration: const InputDecoration(
+                      labelText: 'رقم التواصل * - 10 أرقام',
+                      counterText: '',
+                    ),
+                    validator: SyrianPhone.validate,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(

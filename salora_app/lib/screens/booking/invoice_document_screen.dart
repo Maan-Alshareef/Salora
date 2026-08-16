@@ -280,6 +280,16 @@ class PaymentDocumentCard extends StatelessWidget {
     return text.isEmpty ? '-' : text;
   }
 
+  String _formatDateTime(dynamic raw) {
+    final text = raw?.toString().trim() ?? '';
+    if (text.isEmpty) return '-';
+    final parsed = DateTime.tryParse(text);
+    if (parsed == null) return text;
+    final local = parsed.isUtc ? parsed.toLocal() : parsed;
+    String two(int value) => value.toString().padLeft(2, '0');
+    return '${local.year}-${two(local.month)}-${two(local.day)}\n${two(local.hour)}:${two(local.minute)}';
+  }
+
   String _amount() {
     final currency = _value(invoice['currency']);
     final raw = currency == 'USD' ? invoice['total_usd'] : invoice['total_syp'];
@@ -400,16 +410,14 @@ class PaymentDocumentCard extends StatelessWidget {
                   _account['phone'] ??
                   _account['branch'],
             ),
-            _line('تاريخ رفع الإيصال', _proof['uploaded_at']),
+            _line('تاريخ رفع الإيصال', _formatDateTime(_proof['uploaded_at'])),
             if (_paid)
               _line(
                 'تاريخ قبول الدفعة',
-                invoice['accepted_at'] ?? invoice['paid_at'],
+                _formatDateTime(invoice['accepted_at'] ?? invoice['paid_at']),
               ),
             const Divider(height: 28),
             _line('المبلغ', _amount(), bold: true),
-            if ((_proof['customer_notes'] ?? '').toString().trim().isNotEmpty)
-              _line('ملاحظة العميل', _proof['customer_notes']),
             if (_rejected)
               _line('سبب الرفض', _proof['rejection_reason'], bold: true),
             const SizedBox(height: 12),

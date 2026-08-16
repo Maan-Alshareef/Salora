@@ -77,7 +77,7 @@ class OwnerRequestController extends BaseApiController
             'full_name' => 'required|string|max:150',
             'email' => 'required|email|max:180',
             'otp' => 'required|digits:6',
-            'phone' => 'required|string|max:40',
+            'phone' => ['required', 'regex:/^\d{10}$/'],
             'hall_name' => 'nullable|string|max:180',
             'city' => 'nullable|string|max:120',
             'address' => 'nullable|string|max:255',

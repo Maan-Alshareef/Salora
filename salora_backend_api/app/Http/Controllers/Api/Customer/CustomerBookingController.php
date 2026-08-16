@@ -13,6 +13,7 @@ use App\Models\Service;
 use App\Models\Venue;
 use App\Services\ActivityLogger;
 use App\Services\BookingPricingService;
+use App\Services\ExchangeRateService;
 use App\Services\InvoiceService;
 use App\Services\BookingWorkflowService;
 use App\Services\NotificationService;
@@ -63,7 +64,8 @@ class CustomerBookingController extends BaseApiController
         BookingWorkflowService $workflow,
         VenueAvailabilityService $availability,
         SaloraBookingV2Service $bookingV2,
-        InvoiceService $invoices
+        InvoiceService $invoices,
+        ExchangeRateService $exchangeRates
     ) {
         $data = $request->validate([
             'event_id' => 'nullable|exists:events,id',
@@ -127,7 +129,7 @@ class CustomerBookingController extends BaseApiController
             }
         }
 
-        $result = DB::transaction(function () use ($request, $data, $venue, $pricing, $workflow, $availability, $bookingV2, $invoices, $startAt, $endAt) {
+        $result = DB::transaction(function () use ($request, $data, $venue, $pricing, $workflow, $availability, $bookingV2, $invoices, $exchangeRates, $startAt, $endAt) {
             Venue::whereKey($venue->id)->lockForUpdate()->firstOrFail();
             $availability->expireStalePending($venue->id, $data['event_date']);
             // Keep the existing conflict contract: booking collisions return
@@ -199,22 +201,16 @@ class CustomerBookingController extends BaseApiController
             );
 
             $serviceSubtotalSyp = collect($calculation['service_items'])->sum('total_syp');
-            $serviceSubtotalUsd = collect($calculation['service_items'])->sum('total_usd');
-            $usdToSyp = ((float) ($calculation['hall_usd'] ?? 0)) > 0
-                ? ((float) ($calculation['hall_syp'] ?? 0)) / (float) $calculation['hall_usd']
-                : (float) env('USD_TO_SYP', 14000);
-            if ($usdToSyp <= 0) {
-                $usdToSyp = 14000;
-            }
+            $usdToSyp = max(1, (float) ($calculation['exchange_rate_syp_per_usd'] ?? 0));
 
             $calculation['hall_syp'] = $hallQuote['final_price_syp'];
-            $calculation['hall_usd'] = round($hallQuote['final_price_syp'] / $usdToSyp, 2);
+            $calculation['hall_usd'] = $exchangeRates->toUsd($hallQuote['final_price_syp'], $usdToSyp);
             $calculation['subtotal_syp'] = round($hallQuote['price_before_discount_syp'] + $serviceSubtotalSyp, 2);
-            $calculation['subtotal_usd'] = round(($hallQuote['price_before_discount_syp'] / $usdToSyp) + $serviceSubtotalUsd, 2);
+            $calculation['subtotal_usd'] = $exchangeRates->toUsd($calculation['subtotal_syp'], $usdToSyp);
             $calculation['discount_syp'] = $hallQuote['discount_syp'];
-            $calculation['discount_usd'] = round($hallQuote['discount_syp'] / $usdToSyp, 2);
+            $calculation['discount_usd'] = $exchangeRates->toUsd($hallQuote['discount_syp'], $usdToSyp);
             $calculation['total_syp'] = round($hallQuote['final_price_syp'] + $serviceSubtotalSyp, 2);
-            $calculation['total_usd'] = round(($hallQuote['final_price_syp'] / $usdToSyp) + $serviceSubtotalUsd, 2);
+            $calculation['total_usd'] = $exchangeRates->toUsd($calculation['total_syp'], $usdToSyp);
 
             $event = !empty($data['event_id'])
                 ? Event::whereKey($data['event_id'])->where('customer_id', $request->user()->id)->firstOrFail()
@@ -243,6 +239,7 @@ class CustomerBookingController extends BaseApiController
                 'total_syp' => $calculation['total_syp'],
                 'total_usd' => $calculation['total_usd'],
                 'currency' => $currency,
+                'exchange_rate_syp_per_usd' => $usdToSyp,
                 'expires_at' => null,
             ]);
             $workflow->recordInitialState($booking, $request->user());
@@ -402,6 +399,8 @@ class CustomerBookingController extends BaseApiController
             ->whereNotNull('provider_id')
             ->get();
 
+        $exchangeRates = app(ExchangeRateService::class);
+        $currentRate = $exchangeRates->rate();
         $count = 0;
         foreach ($services as $service) {
             if (!$service->provider || !$service->provider->isAvailableForNewBusiness()) continue;
@@ -420,7 +419,8 @@ class CustomerBookingController extends BaseApiController
                 'service_name' => $service->name_ar ?: $service->name_en,
                 'service_category' => $service->categoryModel?->name_ar ?: $service->category,
                 'price_syp' => $service->price_syp,
-                'price_usd' => $service->price_usd,
+                'price_usd' => $exchangeRates->toUsd($service->price_syp, $currentRate),
+                'exchange_rate_syp_per_usd' => $currentRate,
                 'payment_type' => 'manual_transfer',
                 'status' => 'pending',
                 'customer_notes' => $notes,

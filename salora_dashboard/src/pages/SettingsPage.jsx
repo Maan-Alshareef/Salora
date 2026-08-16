@@ -1,17 +1,88 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useApp } from "../context/AppContext";
 
 export default function SettingsPage() {
-  const { exchangeRate, sendBroadcastToOwner, dynamicPricingRules, activeRuleId, setActiveRuleId } = useApp();
-  const [apiUrl, setApiUrl] = useState(import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api");
-  const [broadcast, setBroadcast] = useState({ title: "تنبيه للمالكين", message: "" });
-  const submitBroadcast = () => { sendBroadcastToOwner(broadcast.title, broadcast.message); setBroadcast({ title: "تنبيه للمالكين", message: "" }); alert("✅ تم إرسال التنبيه إلى مساحة المالك."); };
+  const { exchangeRate, updateExchangeRate } = useApp();
+  const [rateInput, setRateInput] = useState(String(exchangeRate || 14000));
+  const [savingRate, setSavingRate] = useState(false);
+
+  useEffect(() => {
+    setRateInput(String(exchangeRate || 14000));
+  }, [exchangeRate]);
+
+  const numericRate = Number(rateInput);
+  const rateValid = Number.isFinite(numericRate) && numericRate >= 1 && numericRate <= 1000000000;
+
+  const saveExchangeRate = async () => {
+    if (!rateValid) {
+      window.alert("أدخل سعر صرف صحيحاً أكبر من صفر.");
+      return;
+    }
+
+    setSavingRate(true);
+    const result = await updateExchangeRate(numericRate);
+    setSavingRate(false);
+
+    if (result) {
+      window.alert("تم تحديث سعر الصرف بنجاح. سيُطبق السعر الجديد تلقائياً على القيم والفواتير المفتوحة.");
+    }
+  };
+
   return (
-    <div className="space-y-6 pb-12 text-white" dir="rtl">
-      <div><h1 className="text-3xl font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-300 to-white">⚙️ إعدادات النظام</h1><p className="mt-2 text-sm text-slate-400">صفحة ضبط عامة للعرض والتجربة، وكلها باللغة العربية ومهيأة للربط مع الواجهة الخلفية.</p></div>
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2"><div className="rounded-3xl border border-white/10 bg-white/[.04] p-6"><h3 className="mb-3 font-black text-blue-300">🔗 رابط الواجهة الخلفية</h3><div className="flex gap-2"><input className="field-surface ltr flex-1" value={apiUrl} onChange={(e) => setApiUrl(e.target.value)} /><button className="rounded-xl bg-blue-600 px-5 text-sm font-black text-white">حفظ الرابط</button></div><div className="mt-4 grid gap-2 text-sm text-slate-300"><div className="rounded-2xl bg-white/[.03] p-4">✅ التوكن جاهز من خلال apiClient</div><div className="rounded-2xl bg-white/[.03] p-4">✅ فصل صلاحيات الأدمن والمالك</div><div className="rounded-2xl bg-white/[.03] p-4">✅ التطبيق يجلب الصالات والحجوزات والشكاوى من الواجهة الخلفية</div></div></div><div className="rounded-3xl border border-white/10 bg-white/[.04] p-6"><h3 className="mb-3 font-black text-blue-300">💱 العملة</h3><div className="rounded-2xl bg-white/[.03] p-4 text-2xl font-black">1 دولار = {Number(exchangeRate).toLocaleString()} ليرة سورية</div></div></div>
-      <div className="rounded-3xl border border-white/10 bg-white/[.04] p-6"><h3 className="mb-4 font-black text-blue-300">📈 التسعير الديناميكي</h3><div className="flex flex-wrap gap-2">{dynamicPricingRules.map((rule) => <button key={rule.id} onClick={() => setActiveRuleId(rule.id)} className={`rounded-xl px-4 py-3 text-sm font-bold ${activeRuleId === rule.id ? "bg-blue-600 text-white" : "bg-white/[.04] text-slate-300"}`}>{rule.label}</button>)}</div></div>
-      <div className="rounded-3xl border border-white/10 bg-white/[.04] p-6"><h3 className="mb-2 font-black text-blue-300">🔔 إرسال تنبيه للمالكين</h3><input className="field-surface mb-3" value={broadcast.title} onChange={(e) => setBroadcast({ ...broadcast, title: e.target.value })} placeholder="عنوان التنبيه" /><textarea className="field-surface min-h-[120px]" value={broadcast.message} onChange={(e) => setBroadcast({ ...broadcast, message: e.target.value })} placeholder="اكتب الرسالة التي تريد إرسالها..." /><button onClick={submitBroadcast} className="mt-3 w-full rounded-xl bg-blue-600 py-3 font-black text-white">إرسال التنبيه</button></div>
+    <div className="pb-12 text-white" dir="rtl">
+      <div className="mb-6">
+        <h1 className="text-3xl font-black text-white">إعدادات النظام</h1>
+        <p className="mt-2 text-sm text-slate-400">إدارة سعر الصرف المستخدم في التسعير والفواتير.</p>
+      </div>
+
+      <div className="max-w-2xl rounded-3xl border border-white/10 bg-white/[.04] p-6 shadow-xl shadow-black/10">
+        <div className="mb-6 flex items-center justify-between gap-4 border-b border-white/10 pb-5">
+          <div>
+            <h2 className="text-xl font-black text-white">سعر صرف الدولار</h2>
+            <p className="mt-1 text-sm text-slate-400">حدد قيمة الدولار بالليرة السورية.</p>
+          </div>
+          <div className="shrink-0 rounded-2xl bg-blue-500/10 px-4 py-3 text-center">
+            <div className="text-xs text-slate-400">السعر الحالي</div>
+            <div className="mt-1 font-black text-blue-300">
+              {Number(exchangeRate || 0).toLocaleString("en-US")} ل.س
+            </div>
+          </div>
+        </div>
+
+        <label htmlFor="exchange-rate" className="mb-2 block text-sm font-bold text-slate-300">
+          1 USD يساوي
+        </label>
+
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="relative flex-1">
+            <input
+              id="exchange-rate"
+              type="number"
+              min="1"
+              max="1000000000"
+              step="1"
+              inputMode="numeric"
+              className="field-surface ltr w-full text-lg font-black"
+              value={rateInput}
+              onChange={(event) => setRateInput(event.target.value)}
+              placeholder="14000"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={saveExchangeRate}
+            disabled={!rateValid || savingRate}
+            className="rounded-xl bg-blue-600 px-7 py-3 text-sm font-black text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {savingRate ? "جارٍ الحفظ..." : "حفظ"}
+          </button>
+        </div>
+
+        <p className="mt-4 text-sm leading-7 text-slate-400">
+          عند الحفظ يُستخدم السعر الجديد تلقائياً في التسعير والقيم المالية والفواتير المفتوحة.
+        </p>
+      </div>
     </div>
   );
 }

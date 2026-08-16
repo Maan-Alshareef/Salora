@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/api_config.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/validation/syrian_phone.dart';
 
 class BusinessFinanceScreen extends StatefulWidget {
   const BusinessFinanceScreen({super.key, this.initialTab = 0});
@@ -504,7 +505,12 @@ class _BusinessFinanceScreenState extends State<BusinessFinanceScreen>
                 TextField(
                   controller: phone,
                   keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(labelText: 'رقم الهاتف'),
+                  inputFormatters: SyrianPhone.formatters,
+                  maxLength: 10,
+                  decoration: const InputDecoration(
+                    labelText: 'رقم الهاتف - 10 أرقام',
+                    counterText: '',
+                  ),
                 ),
                 const SizedBox(height: 10),
                 TextField(
@@ -554,6 +560,10 @@ class _BusinessFinanceScreenState extends State<BusinessFinanceScreen>
       message('اسم صاحب الحساب مطلوب.');
       return;
     }
+    if (phone.text.trim().isNotEmpty && SyrianPhone.validate(phone.text) != null) {
+      message('رقم الهاتف يجب أن يتكون من 10 أرقام فقط.');
+      return;
+    }
     try {
       await context.read<ApiClient>().post('/business/payout-accounts', {
         'payment_method_id': int.parse(methodId),
@@ -561,7 +571,7 @@ class _BusinessFinanceScreenState extends State<BusinessFinanceScreen>
         'account_number': number.text.trim().isEmpty
             ? null
             : number.text.trim(),
-        'phone': phone.text.trim().isEmpty ? null : phone.text.trim(),
+        'phone': phone.text.trim().isEmpty ? null : SyrianPhone.normalize(phone.text),
         'city': city.text.trim().isEmpty ? null : city.text.trim(),
         'branch': branch.text.trim().isEmpty ? null : branch.text.trim(),
         'instructions': notes.text.trim().isEmpty ? null : notes.text.trim(),

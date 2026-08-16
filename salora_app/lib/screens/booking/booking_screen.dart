@@ -30,9 +30,7 @@ class _BookingScreenState extends State<BookingScreen> {
   String endTime = '23:00';
   late String eventType;
   final eventTitleCtrl = TextEditingController();
-  final hostCtrl = TextEditingController();
   final guestsCtrl = TextEditingController();
-  final notesCtrl = TextEditingController();
   final selectedHallExtraIds = <String>{};
   PaymentMethod method = PaymentMethod.bankTransfer;
   bool submitting = false;
@@ -50,9 +48,7 @@ class _BookingScreenState extends State<BookingScreen> {
   @override
   void dispose() {
     eventTitleCtrl.dispose();
-    hostCtrl.dispose();
     guestsCtrl.dispose();
-    notesCtrl.dispose();
     super.dispose();
   }
 
@@ -207,19 +203,6 @@ class _BookingScreenState extends State<BookingScreen> {
           ),
           const SizedBox(height: 12),
           TextField(
-            controller: hostCtrl,
-            decoration: const InputDecoration(
-              labelText: 'اسم المضيف أو العائلة اختياري',
-              hintText: 'أدخل اسم العائلة أو المضيف',
-              prefixIcon: Icon(Icons.person_outline),
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 18,
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
             controller: guestsCtrl,
             keyboardType: TextInputType.number,
             decoration: InputDecoration(
@@ -251,19 +234,6 @@ class _BookingScreenState extends State<BookingScreen> {
                 }
               });
             },
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: notesCtrl,
-            maxLines: 2,
-            decoration: const InputDecoration(
-              labelText: 'ملاحظات إضافية اختيارية',
-              prefixIcon: Icon(Icons.notes_outlined),
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 18,
-              ),
-            ),
           ),
         ],
       ),
@@ -860,8 +830,6 @@ class _BookingScreenState extends State<BookingScreen> {
         venue: widget.venue,
         eventTypeId: widget.venue.eventTypeIdFor(eventType),
         eventTitle: eventTitleCtrl.text.trim(),
-        hostName: hostCtrl.text.trim(),
-        notes: notesCtrl.text.trim(),
         date: date!,
         startTime: startTime,
         endTime: endTime,

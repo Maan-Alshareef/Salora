@@ -99,11 +99,26 @@ class ProviderAccountProvider extends ChangeNotifier {
     if (bio.trim().length < 10) {
       throw const ApiException('اكتب نبذة واضحة من 10 أحرف على الأقل.');
     }
-    if (allowPhone && contactPhone.trim().isEmpty) {
+    final phone = contactPhone.trim();
+    final whatsapp = whatsappPhone.trim();
+    final phonePattern = RegExp(r'^\d{10}$');
+    const allowedDays = {
+      'saturday', 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday',
+    };
+    if (daysOff.any((day) => !allowedDays.contains(day))) {
+      throw const ApiException('اختر أيام الإجازة من أيام الأسبوع فقط.');
+    }
+    if (allowPhone && phone.isEmpty) {
       throw const ApiException('أدخل رقم الاتصال أو أوقف خيار إظهاره.');
     }
-    if (allowWhatsapp && whatsappPhone.trim().isEmpty) {
+    if (phone.isNotEmpty && !phonePattern.hasMatch(phone)) {
+      throw const ApiException('رقم الاتصال يجب أن يتكون من 10 أرقام فقط.');
+    }
+    if (allowWhatsapp && whatsapp.isEmpty) {
       throw const ApiException('أدخل رقم واتساب أو أوقف خيار إظهاره.');
+    }
+    if (whatsapp.isNotEmpty && !phonePattern.hasMatch(whatsapp)) {
+      throw const ApiException('رقم واتساب يجب أن يتكون من 10 أرقام فقط.');
     }
 
     isSavingProfile = true;
@@ -116,8 +131,8 @@ class ProviderAccountProvider extends ChangeNotifier {
         'working_hours': workingHours,
         'days_off': daysOff,
         'bio': bio.trim(),
-        'contact_phone': contactPhone.trim().isEmpty ? null : contactPhone.trim(),
-        'whatsapp_phone': whatsappPhone.trim().isEmpty ? null : whatsappPhone.trim(),
+        'contact_phone': phone.isEmpty ? null : phone,
+        'whatsapp_phone': whatsapp.isEmpty ? null : whatsapp,
         'allow_phone': allowPhone,
         'allow_whatsapp': allowWhatsapp,
       });

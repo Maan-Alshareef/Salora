@@ -8,7 +8,6 @@ import '../../core/theme/app_colors.dart';
 import '../../core/widgets/price_text.dart';
 import '../../models/service_model.dart';
 import '../../providers/provider_account_provider.dart';
-import 'service_packages_screen.dart';
 
 class ProviderServicesScreen extends StatelessWidget {
   const ProviderServicesScreen({super.key});
@@ -58,7 +57,6 @@ class ProviderServicesScreen extends StatelessWidget {
                             service: service,
                             onEdit: canCreate ? () => _openForm(context, service: service) : null,
                             onDisable: service.isActive ? () => _confirmDisable(context, service.id) : null,
-                            onPackages: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ServicePackagesScreen(serviceId: service.id, serviceName: service.name))),
                           );
                         },
                       ),
@@ -106,13 +104,11 @@ class _ServiceManagementCard extends StatelessWidget {
     required this.service,
     this.onEdit,
     this.onDisable,
-    this.onPackages,
   });
 
   final ServiceModel service;
   final VoidCallback? onEdit;
   final VoidCallback? onDisable;
-  final VoidCallback? onPackages;
 
   @override
   Widget build(BuildContext context) {
@@ -182,12 +178,13 @@ class _ServiceManagementCard extends StatelessWidget {
                   rejectionReason: service.rejectionReason,
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(child: OutlinedButton.icon(onPressed: onEdit, icon: const Icon(Icons.edit_outlined), label: const Text('تعديل وصور'))),
-                    const SizedBox(width: 9),
-                    Expanded(child: OutlinedButton.icon(onPressed: onPackages, icon: const Icon(Icons.inventory_2_outlined), label: const Text('الباقات'))),
-                  ],
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: onEdit,
+                    icon: const Icon(Icons.edit_outlined),
+                    label: const Text('تعديل الخدمة والصور'),
+                  ),
                 ),
                 const SizedBox(height: 6),
                 SizedBox(width: double.infinity, child: TextButton.icon(onPressed: onDisable, icon: const Icon(Icons.pause_circle_outline), label: const Text('إيقاف الخدمة بأمان'))),

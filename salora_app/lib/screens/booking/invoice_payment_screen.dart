@@ -35,7 +35,6 @@ class InvoicePaymentScreen extends StatefulWidget {
 class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
   final GlobalKey _claimKey = GlobalKey();
   final TextEditingController _senderController = TextEditingController();
-  final TextEditingController _notesController = TextEditingController();
 
   XFile? _receipt;
   List<Map<String, dynamic>> _methods = const [];
@@ -56,7 +55,6 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
   @override
   void dispose() {
     _senderController.dispose();
-    _notesController.dispose();
     super.dispose();
   }
 
@@ -300,7 +298,6 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
           'payout_account_id': '${account['id']}',
           'sender_name': _senderController.text.trim(),
           'transferred_at': DateTime.now().toIso8601String(),
-          'customer_notes': _notesController.text.trim(),
         },
         fileField: 'image',
         file: File(receipt.path),
@@ -537,27 +534,14 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
               '3. ارفع إيصال الدفع',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
             ),
-            const SizedBox(height: 6),
-            const Text(
-              'نفّذ التحويل عبر الجهة المختارة، ثم ارفع الإيصال الرسمي الصادر عنها. مطالبة Salora ليست إيصال دفع.',
-              style: TextStyle(color: AppColors.textSecondary, height: 1.5),
-            ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             TextField(
               controller: _senderController,
               decoration: const InputDecoration(
                 labelText: 'اسم الشخص الذي تم التحويل منه *',
               ),
             ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _notesController,
-              maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: 'ملاحظة للمالك أو مقدم الخدمة (اختياري)',
-              ),
-            ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             InkWell(
               onTap: _receipt == null ? null : _openLocalReceipt,
               borderRadius: BorderRadius.circular(20),
@@ -644,16 +628,6 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
                 _submitting
                     ? 'جاري رفع إيصال الدفع...'
                     : 'رفع إيصال الدفع للمراجعة',
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'بعد الرفع يبقى الحجز بانتظار مراجعة صاحب المبلغ. لا توجد مهلة للمراجعة، ولا يصبح الحجز مؤكداً إلا بعد قبول الإيصال.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 12,
-                height: 1.45,
               ),
             ),
           ],

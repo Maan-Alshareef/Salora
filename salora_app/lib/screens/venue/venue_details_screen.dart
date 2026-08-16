@@ -208,10 +208,6 @@ class _VenueDetailsScreenState extends State<VenueDetailsScreen> {
                   _chips('مناسبة لـ', venue.eventTypes),
                   _chips('مجانية ضمن سعر الصالة', venue.includedServices),
                   _pricedHallExtras(venue),
-                  _chips(
-                    'مقدمو خدمات مقترحون',
-                    venue.externalServiceCategories,
-                  ),
                   _chips('المزايا', venue.amenities),
                   _policies(),
                   _reviews(context, venue, localReviews, ratingSummary),

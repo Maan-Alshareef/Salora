@@ -13,6 +13,8 @@ use Illuminate\Validation\ValidationException;
 
 class RefundWorkflowService
 {
+    public function __construct(private readonly ExchangeRateService $exchangeRates) {}
+
     public function requestByCustomer(User $customer, Invoice $invoice, string $reason): PaymentRefund
     {
         return DB::transaction(function () use ($customer, $invoice, $reason) {
@@ -125,6 +127,13 @@ class RefundWorkflowService
 
     private function create(Invoice $invoice, string $role, string $reason, float $percent): PaymentRefund
     {
+        $amountSyp = round((float) $invoice->total_syp * $percent / 100, 2);
+        $exchangeRate = $this->exchangeRates->resolveSnapshotRate(
+            $invoice->exchange_rate_syp_per_usd ?? null,
+            $invoice->total_syp ?? null,
+            $invoice->total_usd ?? null,
+        );
+
         return PaymentRefund::create([
             'invoice_id' => $invoice->id,
             'booking_id' => $invoice->booking_id,
@@ -133,8 +142,8 @@ class RefundWorkflowService
             'requested_by_role' => $role,
             'reason' => $reason,
             'refund_percent' => $percent,
-            'amount_syp' => round((float) $invoice->total_syp * $percent / 100, 2),
-            'amount_usd' => round((float) $invoice->total_usd * $percent / 100, 2),
+            'amount_syp' => $amountSyp,
+            'amount_usd' => $this->exchangeRates->toUsd($amountSyp, $exchangeRate),
             'status' => $percent > 0 ? 'pending_transfer' : 'no_refund',
             'due_at' => $percent > 0 ? now()->addHours((int) config('salora_payments.refund_deadline_hours', 48)) : null,
         ]);

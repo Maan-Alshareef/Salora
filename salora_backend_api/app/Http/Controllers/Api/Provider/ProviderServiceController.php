@@ -9,6 +9,7 @@ use App\Models\ServiceCategory;
 use App\Models\ServiceImage;
 use App\Models\User;
 use App\Services\NotificationService;
+use App\Services\ExchangeRateService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -215,6 +216,14 @@ class ProviderServiceController extends BaseApiController
                 ->values()
                 ->all();
             unset($data['event_type_ids']);
+        }
+
+        $exchangeRates = app(ExchangeRateService::class);
+        $rate = $exchangeRates->rate();
+        if (array_key_exists('price_syp', $data) && (float) $data['price_syp'] > 0) {
+            $data['price_usd'] = $exchangeRates->toUsd($data['price_syp'], $rate);
+        } elseif (array_key_exists('price_usd', $data) && (float) $data['price_usd'] > 0) {
+            $data['price_syp'] = $exchangeRates->toSyp($data['price_usd'], $rate);
         }
 
         $data['pricing_unit'] = 'per_event';

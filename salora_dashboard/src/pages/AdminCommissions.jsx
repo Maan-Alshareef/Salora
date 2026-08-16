@@ -210,7 +210,7 @@ export default function AdminCommissions() {
   );
 }
 
-function MetricCard({ title, value, tone, hint }) { return <div className="rounded-3xl border border-white/10 bg-white/[.04] p-5"><div className="text-xs font-bold text-slate-500">{title}</div><div className={`mt-2 text-2xl font-black ${tone}`}>{value}</div><div className="mt-2 text-xs text-slate-500">{hint}</div></div>; }
+function MetricCard({ title, value, tone, hint }) { return <div className="min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-white/[.04] p-5"><div className="text-xs font-bold text-slate-500">{title}</div><div className={`mt-2 max-w-full break-words text-[clamp(1.05rem,2vw,1.5rem)] font-black leading-tight [overflow-wrap:anywhere] ${tone}`}>{value}</div><div className="mt-2 text-xs text-slate-500">{hint}</div></div>; }
 function Field({ label, children }) { return <label className="space-y-2"><span className="text-xs font-bold text-slate-400">{label}</span>{children}</label>; }
 function sourceLabel(value) { return value === "booking" ? "حجز صالة" : "طلب خدمة"; }
 function numberOrEmpty(value) { const number = Number(value || 0); return number > 0 ? String(number) : ""; }

@@ -45,7 +45,6 @@ class ServiceModel {
   final double rating;
   final int reviewsCount;
   final String description;
-  final List<String> packages;
   final List<String> availableEventTypes;
   final String paymentType;
   final String pricingUnit;
@@ -72,7 +71,6 @@ class ServiceModel {
     required this.rating,
     this.reviewsCount = 0,
     required this.description,
-    required this.packages,
     this.availableEventTypes = const [],
     this.paymentType = 'manual_transfer',
     this.pricingUnit = 'per_event',
@@ -88,7 +86,6 @@ class ServiceModel {
   String get displayProviderName => ArabicText.tr(providerName);
   String get displayCity => ArabicText.tr(city);
   String get displayDescription => ArabicText.tr(description);
-  List<String> get displayPackages => ArabicText.list(packages);
   List<String> get displayEventTypes => ArabicText.list(availableEventTypes);
   String get paymentLabel =>
       'تحويل يدوي مع إثبات عبر شام كاش أو سيريتل كاش أو الهرم';
@@ -148,7 +145,6 @@ class ServiceModel {
     rating: rating,
     reviewsCount: reviewsCount,
     description: description,
-    packages: packages,
     availableEventTypes: availableEventTypes,
     paymentType: paymentType,
     pricingUnit: pricingUnit,
@@ -243,7 +239,6 @@ ServiceModel serviceModelFromJson(Map<String, dynamic> json) {
     description: ArabicText.tr(
       (json['description_ar'] ?? json['description_en'] ?? '').toString(),
     ),
-    packages: _toList(json['packages']),
     availableEventTypes: ArabicText.list(_toList(json['available_for'])),
     paymentType: (json['payment_type'] ?? 'manual_transfer').toString(),
     pricingUnit: 'per_event',

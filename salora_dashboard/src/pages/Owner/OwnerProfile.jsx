@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useApp } from "../../context/AppContext";
 import { dashboardApi } from "../../services/apiClient";
 import { strongPasswordPattern } from "../../utils/passwords";
+import { isValidSyrianPhone, normaliseSyrianPhone, syrianPhoneMessage } from "../../utils/syrianPhone";
 
 export default function OwnerProfile() {
   const { userProfile, updateCurrentProfile, updateCurrentAvatar, arabicLabel } = useApp();
@@ -24,15 +25,19 @@ export default function OwnerProfile() {
     setForm({
       name: userProfile?.name || "",
       email: userProfile?.email || "",
-      phone: userProfile?.phone || ""
+      phone: normaliseSyrianPhone(userProfile?.phone || "")
     });
   }, [userProfile]);
 
   const handleProfileUpdate = async (event) => {
     event.preventDefault();
     setMessage("");
+    if (!isValidSyrianPhone(form.phone)) {
+      setMessage(syrianPhoneMessage);
+      return;
+    }
     setSavingProfile(true);
-    const saved = await updateCurrentProfile({ name: form.name.trim(), phone: form.phone.trim() });
+    const saved = await updateCurrentProfile({ name: form.name.trim(), phone: normaliseSyrianPhone(form.phone) });
     setSavingProfile(false);
     if (saved) setMessage("تم حفظ الاسم ورقم الهاتف وتحديثهما في جميع الواجهات.");
   };
@@ -199,7 +204,7 @@ export default function OwnerProfile() {
         <form onSubmit={handleProfileUpdate} className="space-y-5 text-sm">
           <div><label className="mb-1.5 block font-bold text-slate-400">الاسم الكامل</label><input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="field-surface w-full" required maxLength={120} /></div>
           <div><label className="mb-1.5 block font-bold text-slate-400">البريد الإلكتروني</label><input type="email" value={form.email} className="field-surface ltr w-full opacity-70" readOnly /></div>
-          <div><label className="mb-1.5 block font-bold text-slate-400">رقم الهاتف</label><input type="text" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="field-surface ltr w-full" required maxLength={30} /></div>
+          <div><label className="mb-1.5 block font-bold text-slate-400">رقم الهاتف</label><input type="text" inputMode="numeric" value={form.phone} onChange={(e) => setForm({ ...form, phone: normaliseSyrianPhone(e.target.value) })} className="field-surface ltr w-full" required maxLength={10} placeholder="10 أرقام" /></div>
           <div><label className="mb-1.5 block font-bold text-slate-400">الدور</label><input type="text" value={arabicLabel(userProfile?.role || "")} className="field-surface w-full opacity-70" readOnly /></div>
           <button type="submit" disabled={savingProfile} className="w-full rounded-xl bg-amber-500 py-3 font-black text-slate-950 hover:bg-amber-400 disabled:opacity-50">{savingProfile ? "جارٍ الحفظ..." : "حفظ بيانات الملف"}</button>
         </form>

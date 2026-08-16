@@ -5,12 +5,12 @@ namespace App\Http\Controllers\Api\Owner;
 use App\Http\Controllers\Api\BaseApiController;
 use App\Models\EventType;
 use App\Models\Service;
-use App\Models\Setting;
 use App\Models\Venue;
 use App\Models\VenueImage;
 use App\Models\VenueVideo;
 use App\Models\VenueRevision;
 use App\Services\ActivityLogger;
+use App\Services\ExchangeRateService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -565,12 +565,16 @@ class OwnerVenueController extends BaseApiController
             $payload['map_url'] = 'https://www.google.com/maps/search/?api=1&query='.$payload['latitude'].','.$payload['longitude'];
         }
 
-        $rate = (float) (Setting::where('key', 'exchange_rate_usd_to_syp')->value('value') ?: env('USD_TO_SYP', 14000));
-        if (array_key_exists('price_usd', $payload) && !array_key_exists('price_syp', $payload) && (float) $payload['price_usd'] > 0) {
-            $payload['price_syp'] = round((float) $payload['price_usd'] * $rate, 2);
-        }
-        if (array_key_exists('price_syp', $payload) && !array_key_exists('price_usd', $payload) && (float) $payload['price_syp'] > 0 && $rate > 0) {
-            $payload['price_usd'] = round((float) $payload['price_syp'] / $rate, 2);
+        $exchangeRates = app(ExchangeRateService::class);
+        $rate = $exchangeRates->rate();
+        $baseCurrency = strtoupper((string) ($payload['currency_base'] ?? ''));
+
+        if ($baseCurrency === 'USD' && array_key_exists('price_usd', $payload) && (float) $payload['price_usd'] > 0) {
+            $payload['price_syp'] = $exchangeRates->toSyp($payload['price_usd'], $rate);
+        } elseif (array_key_exists('price_syp', $payload) && (float) $payload['price_syp'] > 0) {
+            $payload['price_usd'] = $exchangeRates->toUsd($payload['price_syp'], $rate);
+        } elseif (array_key_exists('price_usd', $payload) && (float) $payload['price_usd'] > 0) {
+            $payload['price_syp'] = $exchangeRates->toSyp($payload['price_usd'], $rate);
         }
 
         return $payload;

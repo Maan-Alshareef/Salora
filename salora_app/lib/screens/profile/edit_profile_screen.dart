@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/validation/syrian_phone.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../providers/auth_provider.dart';
 
@@ -33,7 +34,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final auth = context.read<AuthProvider>();
     _nameController = TextEditingController(text: auth.rawUserName);
     _emailController = TextEditingController(text: auth.rawEmail);
-    _phoneController = TextEditingController(text: auth.rawPhone);
+    _phoneController = TextEditingController(text: SyrianPhone.normalize(auth.rawPhone));
   }
 
   @override
@@ -126,14 +127,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             TextFormField(
               controller: _phoneController,
               keyboardType: TextInputType.phone,
+              inputFormatters: SyrianPhone.formatters,
               maxLength: 10,
               decoration: const InputDecoration(
-                labelText: 'رقم الهاتف السوري - 10 أرقام',
+                labelText: 'رقم الهاتف - 10 أرقام',
+                counterText: '',
               ),
-              validator: (value) =>
-                  RegExp(r'^\d{10}$').hasMatch(value?.trim() ?? '')
-                  ? null
-                  : 'الرقم يجب أن يكون 10 أرقام',
+              validator: SyrianPhone.validate,
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -226,7 +226,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final auth = context.read<AuthProvider>();
       await auth.updateProfile(
         name: _nameController.text,
-        phone: _phoneController.text,
+        phone: SyrianPhone.normalize(_phoneController.text),
       );
       if (_image != null) {
         await auth.uploadAvatar(_image!);

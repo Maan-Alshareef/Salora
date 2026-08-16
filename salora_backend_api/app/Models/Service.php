@@ -15,6 +15,5 @@ class Service extends Model
     public function venues(){return $this->belongsToMany(Venue::class,'venue_services')->withPivot(['custom_price_syp','custom_price_usd','is_available'])->withTimestamps();}
     public function images(){return $this->hasMany(ServiceImage::class)->orderByDesc('is_main')->orderBy('sort_order')->orderBy('id');}
     public function media(){return $this->hasMany(ServiceMedia::class)->orderByDesc('is_main')->orderBy('sort_order')->orderBy('id');}
-    public function packages(){return $this->hasMany(ServicePackage::class)->orderBy('sort_order')->orderBy('id');}
     public function reviews(){return $this->hasMany(Review::class)->where('status','visible');}
 }

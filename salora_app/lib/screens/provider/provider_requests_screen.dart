@@ -16,6 +16,11 @@ class ProviderRequestsScreen extends StatefulWidget {
 class _ProviderRequestsScreenState extends State<ProviderRequestsScreen> {
   String? _busyId;
 
+  String _calendarDate(DateTime value) {
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${value.year}-${two(value.month)}-${two(value.day)}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ProviderAccountProvider>();
@@ -89,7 +94,7 @@ class _ProviderRequestsScreenState extends State<ProviderRequestsScreen> {
                                 const SizedBox(height: 6),
                                 Text('${request.venueName} • ${request.customerName}', style: const TextStyle(color: AppColors.textSecondary)),
                                 Text(
-                                  '${request.eventDate.year}-${request.eventDate.month}-${request.eventDate.day} • ${request.startTime} - ${request.endTime}',
+                                  '${_calendarDate(request.eventDate)} • ${request.startTime} - ${request.endTime}',
                                   style: const TextStyle(color: AppColors.textSecondary),
                                 ),
                                 const SizedBox(height: 6),

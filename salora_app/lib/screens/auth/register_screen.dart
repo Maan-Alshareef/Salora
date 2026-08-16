@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/validation/syrian_phone.dart';
 import '../../core/widgets/app_logo.dart';
 import '../../providers/auth_provider.dart';
 import 'email_verification_screen.dart';
@@ -67,9 +68,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   TextFormField(
                     controller: _phone,
                     keyboardType: TextInputType.phone,
+                    inputFormatters: SyrianPhone.formatters,
+                    maxLength: 10,
                     textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(labelText: 'رقم الهاتف', hintText: '09xxxxxxxx', prefixIcon: Icon(Icons.phone_outlined)),
-                    validator: (v) => v == null || v.trim().length < 8 ? 'أدخل رقم هاتف صحيحاً' : null,
+                    decoration: const InputDecoration(
+                      labelText: 'رقم الهاتف - 10 أرقام',
+                      hintText: 'xxxxxxxxxx',
+                      prefixIcon: Icon(Icons.phone_outlined),
+                      counterText: '',
+                    ),
+                    validator: SyrianPhone.validate,
                   ),
                   const SizedBox(height: 14),
                   TextFormField(
@@ -136,7 +144,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       final challenge = await context.read<AuthProvider>().register(
             name: _name.text.trim(),
             email: _email.text.trim(),
-            phone: _phone.text.trim(),
+            phone: SyrianPhone.normalize(_phone.text),
             password: _password.text,
             passwordConfirmation: _confirm.text,
           );

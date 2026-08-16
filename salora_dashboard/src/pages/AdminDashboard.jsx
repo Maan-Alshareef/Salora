@@ -46,14 +46,14 @@ export default function AdminDashboard() {
         <Card title="المستخدمون" value={reportData?.users ?? users.length} subtitle="كل الأدوار" />
         <Card title="مقدمو الخدمة" value={providers.length} subtitle="حسابات مسجلة" />
 
-        <div className="rounded-3xl border border-emerald-400/25 bg-emerald-500/10 p-6 shadow-xl">
+        <div className="min-w-0 overflow-hidden rounded-3xl border border-emerald-400/25 bg-emerald-500/10 p-5 shadow-xl">
           <div className="flex items-center justify-between gap-2"><div className="text-xs font-bold text-emerald-300">عمولة Salora المستحقة (10%)</div><button type="button" onClick={() => setCurrency((value) => value === "SYP" ? "USD" : "SYP")} className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-[11px] font-black text-emerald-200">{currency === "SYP" ? "USD" : "SYP"}</button></div>
-          <div className="mt-2 text-xl font-black text-white">{commissionMoney}</div>
-          <div className="mt-1 text-xs text-emerald-100/60">إجمالي الدفعات المعتمدة: {grossMoney}</div>
+          <div className="mt-2 max-w-full break-words text-[clamp(1.05rem,2vw,1.35rem)] font-black leading-tight text-white [overflow-wrap:anywhere]">{commissionMoney}</div>
+          <div className="mt-2 max-w-full break-words text-[11px] leading-5 text-emerald-100/60 [overflow-wrap:anywhere]">إجمالي الدفعات المعتمدة: {grossMoney}</div>
         </div>
 
-        <div className="rounded-3xl border border-blue-400/20 bg-blue-500/10 p-6"><div className="text-xs font-bold text-blue-300">من ملاك الصالات</div><div className="mt-2 text-xl font-black text-blue-100">{ownerCommissionMoney}</div><div className="mt-1 text-xs text-slate-500">حجوزات الصالات المدفوعة</div></div>
-        <div className="rounded-3xl border border-violet-400/20 bg-violet-500/10 p-6"><div className="text-xs font-bold text-violet-300">من مقدمي الخدمات</div><div className="mt-2 text-xl font-black text-violet-100">{providerCommissionMoney}</div><div className="mt-1 text-xs text-slate-500">طلبات الخدمات المدفوعة</div></div>
+        <div className="min-w-0 overflow-hidden rounded-3xl border border-blue-400/20 bg-blue-500/10 p-5"><div className="text-xs font-bold text-blue-300">من ملاك الصالات</div><div className="mt-2 max-w-full break-words text-[clamp(1.05rem,2vw,1.35rem)] font-black leading-tight text-blue-100 [overflow-wrap:anywhere]">{ownerCommissionMoney}</div><div className="mt-1 text-xs text-slate-500">حجوزات الصالات المدفوعة</div></div>
+        <div className="min-w-0 overflow-hidden rounded-3xl border border-violet-400/20 bg-violet-500/10 p-5"><div className="text-xs font-bold text-violet-300">من مقدمي الخدمات</div><div className="mt-2 max-w-full break-words text-[clamp(1.05rem,2vw,1.35rem)] font-black leading-tight text-violet-100 [overflow-wrap:anywhere]">{providerCommissionMoney}</div><div className="mt-1 text-xs text-slate-500">طلبات الخدمات المدفوعة</div></div>
         <div className="rounded-3xl border border-amber-400/20 bg-amber-400/10 p-6"><div className="text-xs font-bold text-amber-300">تحتاج مراجعة</div><div className="mt-2 text-3xl font-black text-amber-200">{metrics.pendingApprovals + metrics.pendingPayments}</div></div>
       </div>
 

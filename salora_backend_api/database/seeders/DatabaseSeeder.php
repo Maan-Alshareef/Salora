@@ -51,7 +51,7 @@ class DatabaseSeeder extends Seeder
             'admin' => User::create([
                 'name' => 'مدير النظام',
                 'email' => 'admin@salora.test',
-                'phone' => '+963900000001',
+                'phone' => '0900000001',
                 'password' => $password,
                 'role' => 'admin',
                 'status' => 'active',
@@ -60,7 +60,7 @@ class DatabaseSeeder extends Seeder
             'owner' => User::create([
                 'name' => 'مدير قاعة الياقوت',
                 'email' => 'owner@salora.test',
-                'phone' => '+963900000002',
+                'phone' => '0900000002',
                 'password' => $password,
                 'role' => 'owner',
                 'status' => 'active',
@@ -69,7 +69,7 @@ class DatabaseSeeder extends Seeder
             'owner2' => User::create([
                 'name' => 'مدير تراس لونا',
                 'email' => 'owner2@salora.test',
-                'phone' => '+963900000003',
+                'phone' => '0900000003',
                 'password' => $password,
                 'role' => 'owner',
                 'status' => 'active',
@@ -78,7 +78,7 @@ class DatabaseSeeder extends Seeder
             'provider' => User::create([
                 'name' => 'Moments Photography',
                 'email' => 'provider@salora.test',
-                'phone' => '+963900000004',
+                'phone' => '0900000004',
                 'password' => $password,
                 'role' => 'provider',
                 'status' => 'active',
@@ -87,7 +87,7 @@ class DatabaseSeeder extends Seeder
             'customer' => User::create([
                 'name' => 'عميل تجريبي',
                 'email' => 'customer@salora.test',
-                'phone' => '+963900000005',
+                'phone' => '0900000005',
                 'birth_date' => '1998-05-12',
                 'password' => $password,
                 'role' => 'customer',
@@ -97,7 +97,7 @@ class DatabaseSeeder extends Seeder
             'customer2' => User::create([
                 'name' => 'عميلة تجريبية',
                 'email' => 'customer2@salora.test',
-                'phone' => '+963900000006',
+                'phone' => '0900000006',
                 'birth_date' => '2000-09-21',
                 'password' => $password,
                 'role' => 'customer',

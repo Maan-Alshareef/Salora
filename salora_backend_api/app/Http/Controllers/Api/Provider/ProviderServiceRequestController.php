@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Provider;
 use App\Http\Controllers\Api\BaseApiController;
 use App\Models\Booking;
 use App\Models\ProviderServiceRequest;
+use App\Services\ExchangeRateService;
 use App\Services\InvoiceService;
 use App\Services\NotificationService;
 use App\Services\PaymentWorkflowService;
@@ -331,6 +332,7 @@ class ProviderServiceRequestController extends BaseApiController
         Request $request,
         ProviderServiceRequest $providerRequest,
         PlatformCommissionService $commissions,
+        ExchangeRateService $exchangeRates,
     ) {
         abort_unless((int) $providerRequest->provider_id === (int) $request->user()->id, 403);
 
@@ -381,13 +383,18 @@ class ProviderServiceRequestController extends BaseApiController
                     ->where('reason', 'provider_cancelled')
                     ->first();
                 if (!$existing) {
+                    $refundExchangeRate = $exchangeRates->resolveSnapshotRate(
+                        $locked->invoice?->exchange_rate_syp_per_usd,
+                        $locked->invoice?->total_syp ?? $locked->price_syp,
+                        $locked->invoice?->total_usd ?? $locked->price_usd,
+                    );
                     DB::table('payment_refunds')->insert([
                         'booking_id' => $locked->booking_id,
                         'invoice_id' => $locked->invoice_id,
                         'customer_id' => $locked->customer_id,
                         'payee_id' => $locked->provider_id,
                         'amount_syp' => $refund,
-                        'amount_usd' => 0,
+                        'amount_usd' => $exchangeRates->toUsd($refund, $refundExchangeRate),
                         'refund_percent' => $refundPercent,
                         'status' => 'pending',
                         'requested_by_role' => 'provider',

@@ -7,6 +7,8 @@ use App\Models\Setting;
 
 class BookingFinanceService
 {
+    public function __construct(private readonly ExchangeRateService $exchangeRates) {}
+
     public const DEFAULT_COMMISSION_PERCENT = 10.0;
 
     public function commissionPercent(): float
@@ -17,16 +19,28 @@ class BookingFinanceService
 
     public function amounts(Booking $booking): array
     {
-        $rate = $this->commissionPercent();
-        $commissionSyp = round((float) $booking->total_syp * $rate / 100, 2);
-        $commissionUsd = round((float) $booking->total_usd * $rate / 100, 2);
+        $commissionRate = $this->commissionPercent();
+        $exchangeRate = $this->exchangeRates->resolveSnapshotRate(
+            $booking->exchange_rate_syp_per_usd ?? null,
+            $booking->total_syp,
+            $booking->total_usd,
+        );
+        $totalSyp = (float) $booking->total_syp;
+        $totalUsd = $this->exchangeRates->toUsd($totalSyp, $exchangeRate);
+        $commissionSyp = round($totalSyp * $commissionRate / 100, 2);
+        $commissionUsd = $this->exchangeRates->toUsd($commissionSyp, $exchangeRate);
+        $ownerNetSyp = max(0, round($totalSyp - $commissionSyp, 2));
 
         return [
-            'platform_commission_rate' => $rate,
+            'subtotal_usd' => $this->exchangeRates->toUsd($booking->subtotal_syp, $exchangeRate),
+            'discount_usd' => $this->exchangeRates->toUsd($booking->discount_syp, $exchangeRate),
+            'total_usd' => $totalUsd,
+            'exchange_rate_syp_per_usd' => $exchangeRate,
+            'platform_commission_rate' => $commissionRate,
             'platform_commission_syp' => $commissionSyp,
             'platform_commission_usd' => $commissionUsd,
-            'owner_net_syp' => max(0, round((float) $booking->total_syp - $commissionSyp, 2)),
-            'owner_net_usd' => max(0, round((float) $booking->total_usd - $commissionUsd, 2)),
+            'owner_net_syp' => $ownerNetSyp,
+            'owner_net_usd' => $this->exchangeRates->toUsd($ownerNetSyp, $exchangeRate),
         ];
     }
 

@@ -198,44 +198,6 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                       height: 1.5,
                     ),
                   ),
-                  if (service.packages.isNotEmpty) ...[
-                    const SizedBox(height: 20),
-                    const Text(
-                      'الباقات',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    ...service.packages.map(
-                      (item) => Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.check_circle_outline,
-                              color: AppColors.success,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                item,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
                   const SizedBox(height: 20),
                   Container(
                     padding: const EdgeInsets.all(14),

@@ -4,7 +4,6 @@ use App\Http\Controllers\Api\Admin\PaymentMethodController;
 use App\Http\Controllers\Api\Customer\InvoicePaymentController;
 use App\Http\Controllers\Api\PaymentReviewController;
 use App\Http\Controllers\Api\PayoutAccountController;
-use App\Http\Controllers\Api\Provider\ProviderServicePackageController;
 use App\Http\Controllers\Api\RefundProofFileController;
 use App\Http\Controllers\Api\Public\BusinessApplicationController;
 use App\Http\Controllers\Api\Public\ReceiptVerificationController;
@@ -32,9 +31,3 @@ Route::middleware(['auth:sanctum','account.active','role:admin'])->prefix('admin
     Route::get('/payment-methods',[PaymentMethodController::class,'index']);Route::post('/payment-methods/{paymentMethod}',[PaymentMethodController::class,'update']);Route::post('/payment-methods/{paymentMethod}/toggle',[PaymentMethodController::class,'toggle']);Route::get('/payment-refunds',[AdminPaymentController::class,'refunds']);
 });
 
-Route::middleware(['auth:sanctum','account.active','role:provider'])->prefix('provider')->group(function(){
-    Route::get('/services/{service}/packages',[ProviderServicePackageController::class,'index']);
-    Route::post('/services/{service}/packages',[ProviderServicePackageController::class,'store']);
-    Route::put('/services/{service}/packages/{servicePackage}',[ProviderServicePackageController::class,'update']);
-    Route::delete('/services/{service}/packages/{servicePackage}',[ProviderServicePackageController::class,'destroy']);
-});

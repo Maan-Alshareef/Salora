@@ -121,7 +121,7 @@ export default function ReportsPage() {
 }
 
 const tooltipStyle = { backgroundColor: "#0f172a", border: "1px solid rgba(255,255,255,.1)", borderRadius: 14 };
-function Metric({ title, value, tone }) { return <div className="rounded-3xl border border-white/10 bg-white/[.04] p-6"><div className="text-xs font-bold text-slate-500">{title}</div><div className={`mt-2 text-2xl font-black ${tone}`}>{value}</div></div>; }
+function Metric({ title, value, tone }) { return <div className="min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-white/[.04] p-5"><div className="text-xs font-bold text-slate-500">{title}</div><div className={`mt-2 max-w-full break-words text-[clamp(1rem,2vw,1.4rem)] font-black leading-tight [overflow-wrap:anywhere] ${tone}`}>{value}</div></div>; }
 function ChartCard({ title, children, compact = false }) { return <div className="rounded-3xl border border-white/10 bg-white/[.04] p-6"><h3 className="mb-4 text-sm font-black text-blue-300">{title}</h3><div className={compact ? "h-64" : "h-72"}><ResponsiveContainer width="100%" height="100%">{children}</ResponsiveContainer></div></div>; }
 function Summary({ label, value }) { return <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"><div className="text-xs text-slate-500">{label}</div><div className="mt-1 text-2xl font-black text-white">{value}</div></div>; }
 function Empty() { return <div className="rounded-2xl border border-white/10 p-6 text-center text-sm text-slate-500">لا توجد بيانات كافية بعد.</div>; }

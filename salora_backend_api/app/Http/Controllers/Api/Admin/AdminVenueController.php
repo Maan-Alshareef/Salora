@@ -10,6 +10,7 @@ use App\Models\VenueImage;
 use App\Models\VenueVideo;
 use App\Models\VenueRevision;
 use App\Services\ActivityLogger;
+use App\Services\ExchangeRateService;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -107,7 +108,8 @@ class AdminVenueController extends BaseApiController
             $locked = VenueRevision::whereKey($revision->id)->lockForUpdate()->firstOrFail();
             if ($locked->status !== 'pending') abort(409, 'Revision was reviewed by another administrator.');
             $venue = Venue::whereKey($locked->venue_id)->lockForUpdate()->firstOrFail();
-            $venue->update([...($locked->payload ?? []), 'status' => 'approved', 'rejection_reason' => null]);
+            $payload = $this->normalizeRevisionPricing((array) ($locked->payload ?? []), $venue);
+            $venue->update([...$payload, 'status' => 'approved', 'rejection_reason' => null]);
             $venue->owner?->forceFill(['business_status' => 'approved', 'business_rejection_reason' => null])->save();
 
             if ($locked->event_type_ids !== null) $venue->eventTypes()->sync($locked->event_type_ids);
@@ -194,9 +196,12 @@ class AdminVenueController extends BaseApiController
             : ($venue?->videos?->pluck('video_url')->values()->all() ?? []);
 
         $current = $venue?->toArray() ?? [];
+        $revisionPayload = $venue
+            ? $this->normalizeRevisionPricing((array) ($revision->payload ?? []), $venue)
+            : (array) ($revision->payload ?? []);
         $proposed = [
             ...$current,
-            ...($revision->payload ?? []),
+            ...$revisionPayload,
             'event_types' => $eventTypes?->values(),
             'services' => $services?->values(),
             'images' => collect($imageUrls)->values()->map(fn ($url, $index) => [
@@ -211,7 +216,7 @@ class AdminVenueController extends BaseApiController
         ];
 
         $candidates = array_values(array_unique([
-            ...array_keys($revision->payload ?? []),
+            ...array_keys($revisionPayload),
             ...($revision->event_type_ids !== null ? ['event_types'] : []),
             ...($revision->service_ids !== null ? ['services'] : []),
             ...($revision->replace_images ? ['images'] : []),
@@ -246,6 +251,27 @@ class AdminVenueController extends BaseApiController
             'proposed_snapshot' => $proposed,
             'changed_fields' => $changedFields,
         ];
+    }
+
+    private function normalizeRevisionPricing(array $payload, Venue $venue): array
+    {
+        if (!array_key_exists('price_syp', $payload) && !array_key_exists('price_usd', $payload)) {
+            return $payload;
+        }
+
+        $exchangeRates = app(ExchangeRateService::class);
+        $rate = $exchangeRates->rate();
+        $currencyBase = strtoupper((string) ($payload['currency_base'] ?? $venue->currency_base ?? 'SYP'));
+
+        if ($currencyBase === 'USD' && array_key_exists('price_usd', $payload) && (float) $payload['price_usd'] > 0) {
+            $payload['price_syp'] = $exchangeRates->toSyp($payload['price_usd'], $rate);
+        } elseif (array_key_exists('price_syp', $payload) && (float) $payload['price_syp'] > 0) {
+            $payload['price_usd'] = $exchangeRates->toUsd($payload['price_syp'], $rate);
+        } elseif (array_key_exists('price_usd', $payload) && (float) $payload['price_usd'] > 0) {
+            $payload['price_syp'] = $exchangeRates->toSyp($payload['price_usd'], $rate);
+        }
+
+        return $payload;
     }
 
     private function revisionFieldChanged(string $field, mixed $current, mixed $proposed): bool

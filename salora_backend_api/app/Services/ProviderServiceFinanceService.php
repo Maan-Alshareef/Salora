@@ -7,6 +7,8 @@ use App\Models\Setting;
 
 class ProviderServiceFinanceService
 {
+    public function __construct(private readonly ExchangeRateService $exchangeRates) {}
+
     public const DEFAULT_COMMISSION_PERCENT = 10.0;
 
     public function commissionPercent(): float
@@ -17,16 +19,26 @@ class ProviderServiceFinanceService
 
     public function amounts(ProviderServiceRequest $request): array
     {
-        $rate = $this->commissionPercent();
-        $commissionSyp = round((float) $request->price_syp * $rate / 100, 2);
-        $commissionUsd = round((float) $request->price_usd * $rate / 100, 2);
+        $commissionRate = $this->commissionPercent();
+        $exchangeRate = $this->exchangeRates->resolveSnapshotRate(
+            $request->exchange_rate_syp_per_usd ?? null,
+            $request->price_syp,
+            $request->price_usd,
+        );
+        $priceSyp = (float) $request->price_syp;
+        $priceUsd = $this->exchangeRates->toUsd($priceSyp, $exchangeRate);
+        $commissionSyp = round($priceSyp * $commissionRate / 100, 2);
+        $commissionUsd = $this->exchangeRates->toUsd($commissionSyp, $exchangeRate);
+        $netSyp = max(0, round($priceSyp - $commissionSyp, 2));
 
         return [
-            'provider_commission_rate' => $rate,
+            'price_usd' => $priceUsd,
+            'exchange_rate_syp_per_usd' => $exchangeRate,
+            'provider_commission_rate' => $commissionRate,
             'provider_commission_syp' => $commissionSyp,
             'provider_commission_usd' => $commissionUsd,
-            'provider_net_syp' => max(0, round((float) $request->price_syp - $commissionSyp, 2)),
-            'provider_net_usd' => max(0, round((float) $request->price_usd - $commissionUsd, 2)),
+            'provider_net_syp' => $netSyp,
+            'provider_net_usd' => $this->exchangeRates->toUsd($netSyp, $exchangeRate),
         ];
     }
 

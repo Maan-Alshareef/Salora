@@ -2,12 +2,13 @@
 
 namespace App\Services;
 
-use App\Models\Setting;
 use App\Models\Venue;
 use App\Models\VenueOffer;
 
 class BookingPricingService
 {
+    public function __construct(private readonly ExchangeRateService $exchangeRates) {}
+
     public function calculate(
         Venue $venue,
         int $guests,
@@ -15,12 +16,15 @@ class BookingPricingService
         ?string $eventDate = null,
         string $currency = 'SYP'
     ): array {
-        $usdToSyp = (float) (Setting::where('key', 'exchange_rate_usd_to_syp')->value('value') ?: env('USD_TO_SYP', 14000));
+        $usdToSyp = $this->exchangeRates->rate();
 
         $hallSyp = (float) ($venue->hourly_price_syp ?: $venue->price_syp);
         $hallUsd = (float) $venue->price_usd;
-        if ($hallSyp <= 0 && $hallUsd > 0) $hallSyp = round($hallUsd * $usdToSyp, 2);
-        if ($hallUsd <= 0 && $hallSyp > 0 && $usdToSyp > 0) $hallUsd = round($hallSyp / $usdToSyp, 2);
+        if ($hallSyp > 0) {
+            $hallUsd = $this->exchangeRates->toUsd($hallSyp, $usdToSyp);
+        } elseif ($hallUsd > 0) {
+            $hallSyp = $this->exchangeRates->toSyp($hallUsd, $usdToSyp);
+        }
 
         $services = $venue->services()
             ->whereIn('services.id', $serviceIds)
@@ -44,8 +48,11 @@ class BookingPricingService
                 $syp = $service->pivot->custom_price_syp !== null
                     ? (float) $service->pivot->custom_price_syp
                     : (float) $service->price_syp;
-                if ($syp <= 0 && $usd > 0) $syp = round($usd * $usdToSyp, 2);
-                if ($usd <= 0 && $syp > 0 && $usdToSyp > 0) $usd = round($syp / $usdToSyp, 2);
+                if ($syp > 0) {
+                    $usd = $this->exchangeRates->toUsd($syp, $usdToSyp);
+                } elseif ($usd > 0) {
+                    $syp = $this->exchangeRates->toSyp($usd, $usdToSyp);
+                }
             }
             $servicesUsd += $usd;
             $servicesSyp += $syp;
@@ -79,6 +86,7 @@ class BookingPricingService
             'total_usd' => max(0, round($subtotalUsd - $discountUsd, 2)),
             'total_syp' => max(0, round($subtotalSyp - $discountSyp, 2)),
             'offer_id' => $offer?->id,
+            'exchange_rate_syp_per_usd' => $usdToSyp,
         ];
     }
 

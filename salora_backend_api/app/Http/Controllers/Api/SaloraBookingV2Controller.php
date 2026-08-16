@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Notifications\SaloraBookingV2Notification;
 use App\Services\SaloraBookingV2Service;
 use App\Services\BookingModificationService;
+use App\Services\ExchangeRateService;
 use App\Services\NotificationService;
 use App\Services\PaymentWorkflowService;
 use App\Services\VenueOfferAnnouncementService;
@@ -725,14 +726,21 @@ class SaloraBookingV2Controller extends Controller
                     ->when(Schema::hasColumn('invoices', 'source_type'), fn ($q) => $q->where('source_type', 'venue_booking'))
                     ->latest('id')
                     ->first();
-                $usdToSyp = max(1, (float) env('USD_TO_SYP', 14000));
+                $exchangeRates = app(ExchangeRateService::class);
+                $usdToSyp = $invoice
+                    ? $exchangeRates->resolveSnapshotRate(
+                        $invoice->exchange_rate_syp_per_usd ?? null,
+                        $invoice->total_syp ?? null,
+                        $invoice->total_usd ?? null,
+                    )
+                    : $exchangeRates->rate();
                 $adjustmentId = DB::table('salora_booking_payment_adjustments')->insertGetId([
                     'booking_id' => $booking,
                     'change_request_id' => $changeRequest,
                     'invoice_id' => $invoice->id ?? null,
                     'type' => 'additional_payment',
                     'amount_syp' => $difference,
-                    'amount_usd' => round($difference / $usdToSyp, 2),
+                    'amount_usd' => $exchangeRates->toUsd($difference, $usdToSyp),
                     'old_total_syp' => (float) ($preview['old_invoice_total_syp'] ?? 0),
                     'new_total_syp' => (float) ($preview['booking_total_syp'] ?? 0),
                     'paid_syp' => 0,
@@ -740,6 +748,7 @@ class SaloraBookingV2Controller extends Controller
                     'metadata' => json_encode([
                         'reason' => 'booking_change_owner_approved_waiting_difference',
                         'quote' => $preview,
+                        'exchange_rate_syp_per_usd' => $usdToSyp,
                     ], JSON_UNESCAPED_UNICODE),
                     'created_at' => now(),
                     'updated_at' => now(),

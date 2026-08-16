@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Api\BaseApiController;
 use App\Models\Service;
 use App\Models\ServiceCategory;
+use App\Services\ExchangeRateService;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -21,7 +22,7 @@ class AdminServiceController extends BaseApiController
 
     public function store(Request $request)
     {
-        $data = $this->normalizeCategory($this->validated($request, false), null);
+        $data = $this->normalizePricing($this->normalizeCategory($this->validated($request, false), null));
         $service = Service::create([
             ...$data,
             'is_active' => true,
@@ -33,7 +34,7 @@ class AdminServiceController extends BaseApiController
     public function update(Request $request, Service $service)
     {
         $data = $this->validated($request, true);
-        $service->update($this->normalizeCategory($data, $data['type'] ?? $service->type));
+        $service->update($this->normalizePricing($this->normalizeCategory($data, $data['type'] ?? $service->type)));
         return $this->ok($service->fresh(['provider:id,name,email,phone,avatar', 'provider.providerProfile', 'categoryModel.parent', 'images', 'venues:id,owner_id,name_en,name_ar']), 'Service updated.');
     }
 
@@ -86,6 +87,21 @@ class AdminServiceController extends BaseApiController
         }
 
         $data['category'] = $category->name_en;
+        return $data;
+    }
+
+
+    private function normalizePricing(array $data): array
+    {
+        $exchangeRates = app(ExchangeRateService::class);
+        $rate = $exchangeRates->rate();
+
+        if (array_key_exists('price_syp', $data) && (float) $data['price_syp'] > 0) {
+            $data['price_usd'] = $exchangeRates->toUsd($data['price_syp'], $rate);
+        } elseif (array_key_exists('price_usd', $data) && (float) $data['price_usd'] > 0) {
+            $data['price_syp'] = $exchangeRates->toSyp($data['price_usd'], $rate);
+        }
+
         return $data;
     }
 

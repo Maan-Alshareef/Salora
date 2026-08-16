@@ -10,6 +10,8 @@ class PlatformCommissionService
 {
     public const RATE = 10.0;
 
+    public function __construct(private readonly ExchangeRateService $exchangeRates) {}
+
     private const ACTIVE_BOOKING_STATUSES = [
         'confirmed', 'completed', 'modification_requested', 'cancellation_pending_refund',
     ];
@@ -60,10 +62,12 @@ class PlatformCommissionService
         $grossSyp = $isCancellationFinancial && $booking->owner_retained_syp !== null
             ? (float) $booking->owner_retained_syp
             : (float) $booking->total_syp;
-        $grossUsd = (float) $booking->total_usd;
-        if ($isCancellationFinancial && (float) $booking->total_syp > 0) {
-            $grossUsd = round((float) $booking->total_usd * ($grossSyp / (float) $booking->total_syp), 2);
-        }
+        $exchangeRate = $this->exchangeRates->resolveSnapshotRate(
+            $booking->exchange_rate_syp_per_usd ?? null,
+            $booking->total_syp ?? null,
+            $booking->total_usd ?? null,
+        );
+        $grossUsd = $this->exchangeRates->toUsd($grossSyp, $exchangeRate);
 
         $rate = (float) ($booking->platform_commission_rate ?? $booking->commission_rate ?? self::RATE);
         if ($rate <= 0) $rate = self::RATE;
@@ -72,9 +76,7 @@ class PlatformCommissionService
             : (isset($booking->commission_syp) && (float) $booking->commission_syp > 0
                 ? (float) $booking->commission_syp
                 : round($grossSyp * $rate / 100, 2));
-        $commissionUsd = isset($booking->platform_commission_usd) && (float) $booking->platform_commission_usd > 0
-            ? (float) $booking->platform_commission_usd
-            : round($grossUsd * $rate / 100, 2);
+        $commissionUsd = $this->exchangeRates->toUsd($commissionSyp, $exchangeRate);
 
         return $this->upsert(
             'booking',
@@ -127,10 +129,12 @@ class PlatformCommissionService
             $grossSyp = $isCancellationFinancial && $booking->owner_retained_syp !== null
                 ? (float) $booking->owner_retained_syp
                 : (float) $booking->total_syp;
-            $grossUsd = (float) $booking->total_usd;
-            if ($isCancellationFinancial && (float) $booking->total_syp > 0) {
-                $grossUsd = round((float) $booking->total_usd * ($grossSyp / (float) $booking->total_syp), 2);
-            }
+            $exchangeRate = $this->exchangeRates->resolveSnapshotRate(
+                $booking->exchange_rate_syp_per_usd ?? null,
+                $booking->total_syp ?? null,
+                $booking->total_usd ?? null,
+            );
+            $grossUsd = $this->exchangeRates->toUsd($grossSyp, $exchangeRate);
             $rate = (float) ($booking->platform_commission_rate ?? $booking->commission_rate ?? self::RATE);
             if ($rate <= 0) $rate = self::RATE;
             $commissionSyp = isset($booking->platform_commission_syp) && (float) $booking->platform_commission_syp > 0
@@ -138,9 +142,7 @@ class PlatformCommissionService
                 : (isset($booking->commission_syp) && (float) $booking->commission_syp > 0
                     ? (float) $booking->commission_syp
                     : round($grossSyp * $rate / 100, 2));
-            $commissionUsd = isset($booking->platform_commission_usd) && (float) $booking->platform_commission_usd > 0
-                ? (float) $booking->platform_commission_usd
-                : round($grossUsd * $rate / 100, 2);
+            $commissionUsd = $this->exchangeRates->toUsd($commissionSyp, $exchangeRate);
 
             $stale = ! $row
                 || abs((float) $row->gross_syp - $grossSyp) > 0.01
@@ -177,10 +179,12 @@ class PlatformCommissionService
 
         $isCancellationFinancial = in_array((string) $request->status, self::CANCELLED_PROVIDER_STATUSES, true) && (float) ($request->provider_retained_syp ?? 0) > 0;
         $grossSyp = $isCancellationFinancial ? (float) $request->provider_retained_syp : (float) $request->price_syp;
-        $grossUsd = (float) $request->price_usd;
-        if ($isCancellationFinancial && (float) $request->price_syp > 0) {
-            $grossUsd = round((float) $request->price_usd * ($grossSyp / (float) $request->price_syp), 2);
-        }
+        $exchangeRate = $this->exchangeRates->resolveSnapshotRate(
+            $request->exchange_rate_syp_per_usd ?? null,
+            $request->price_syp ?? null,
+            $request->price_usd ?? null,
+        );
+        $grossUsd = $this->exchangeRates->toUsd($grossSyp, $exchangeRate);
 
         return $this->upsert(
             'provider_service_request',

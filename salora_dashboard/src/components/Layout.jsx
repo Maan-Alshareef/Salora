@@ -23,6 +23,7 @@ const adminLinks = [
   { path: "/admin/reports", label: "التقارير", icon: "📈" },
   { path: "/admin/activity", label: "سجل النشاط", icon: "🧾" },
   { path: "/admin/notifications", label: "الإشعارات", icon: "🔔" },
+  { path: "/admin/settings", label: "إعدادات النظام", icon: "⚙️" },
   { path: "/admin/profile", label: "الملف الشخصي", icon: "👤" }
 ];
 

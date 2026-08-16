@@ -223,14 +223,9 @@ class ProviderServiceRequestModel {
                 'صالة')
             .toString(),
       ),
-      eventDate:
-          DateTime.tryParse(
-            (booking['event_date'] ??
-                    json['event_date'] ??
-                    DateTime.now().toIso8601String())
-                .toString(),
-          ) ??
-          DateTime.now(),
+      eventDate: _parseCalendarDate(
+        booking['event_date'] ?? json['event_date'],
+      ),
       startTime: (booking['start_time'] ?? json['start_time'] ?? '').toString(),
       endTime: (booking['end_time'] ?? json['end_time'] ?? '').toString(),
       priceSyp: _toInt(json['price_syp'] ?? service['price_syp'] ?? 0),
@@ -309,4 +304,21 @@ double _toDouble(dynamic value) {
   if (value is double) return value;
   if (value is num) return value.toDouble();
   return double.tryParse(value?.toString() ?? '') ?? 0;
+}
+
+
+DateTime _parseCalendarDate(dynamic raw) {
+  final text = raw?.toString().trim() ?? '';
+  final match = RegExp(r'^(\d{4})-(\d{2})-(\d{2})').firstMatch(text);
+  if (match != null) {
+    return DateTime(
+      int.parse(match.group(1)!),
+      int.parse(match.group(2)!),
+      int.parse(match.group(3)!),
+    );
+  }
+  final parsed = DateTime.tryParse(text);
+  if (parsed != null) return DateTime(parsed.year, parsed.month, parsed.day);
+  final now = DateTime.now();
+  return DateTime(now.year, now.month, now.day);
 }
