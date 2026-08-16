@@ -127,6 +127,8 @@ class AuthProvider extends ChangeNotifier {
       final data = await _api.post('/auth/login', {
         'email': email.trim(),
         'password': password,
+        'client_type': 'mobile',
+        'expected_role': role.name,
       });
       await _establishSession(Map<String, dynamic>.from(data as Map));
     } catch (e) {

@@ -29,6 +29,11 @@ class ProviderServiceRequestModel {
   final String? paymentProofUrl;
   final String? paymentRejectionReason;
   final String? providerReply;
+  final String cancellationStatus;
+  final String? cancellationReason;
+  final double refundPercentage;
+  final int refundedSyp;
+  final int providerRetainedSyp;
   final double providerCommissionRate;
   final int providerCommissionSyp;
   final int providerNetSyp;
@@ -62,6 +67,11 @@ class ProviderServiceRequestModel {
     this.paymentProofUrl,
     this.paymentRejectionReason,
     this.providerReply,
+    this.cancellationStatus = '',
+    this.cancellationReason,
+    this.refundPercentage = 0,
+    this.refundedSyp = 0,
+    this.providerRetainedSyp = 0,
     this.providerCommissionRate = 10,
     this.providerCommissionSyp = 0,
     this.providerNetSyp = 0,
@@ -75,7 +85,7 @@ class ProviderServiceRequestModel {
       case 'rejected':
         return 'مرفوض';
       case 'cancelled':
-        return 'ملغى';
+        return cancellationStatus == 'waiting_refund' ? 'ملغى - بانتظار الاسترداد' : 'ملغى';
       default:
         return 'بانتظار موافقة مقدم الخدمة';
     }
@@ -89,6 +99,10 @@ class ProviderServiceRequestModel {
       case 'approved':
       case 'paid':
         return 'مدفوع ومؤكد';
+      case 'pending_refund':
+        return 'بانتظار تأكيد الاسترداد';
+      case 'refunded':
+        return 'تم الاسترداد';
       case 'rejected':
         return 'إيصال الدفع مرفوض - ارفع إيصالاً جديداً';
       default:
@@ -123,6 +137,11 @@ class ProviderServiceRequestModel {
       status == 'accepted' &&
       (paymentStatus == 'approved' || paymentStatus == 'paid');
 
+  bool get canCancelByProvider => status == 'accepted';
+
+  bool get canConfirmRefund =>
+      status == 'cancelled' && cancellationStatus == 'waiting_refund';
+
   factory ProviderServiceRequestModel.fromJson(Map<String, dynamic> json) {
     final booking = json['booking'] is Map
         ? Map<String, dynamic>.from(json['booking'] as Map)
@@ -149,17 +168,20 @@ class ProviderServiceRequestModel {
         .toString()
         .toLowerCase();
     final invoiceStatus = (invoice['status'] ?? '').toString().toLowerCase();
+    final rawPaymentStatus = (json['payment_status'] ?? 'unpaid')
+        .toString()
+        .toLowerCase();
     String resolvedPaymentStatus;
-    if (latestProofStatus == 'pending' || invoiceStatus == 'proof_uploaded') {
+    if (['pending_refund', 'refunded', 'cancelled'].contains(rawPaymentStatus)) {
+      resolvedPaymentStatus = rawPaymentStatus;
+    } else if (latestProofStatus == 'pending' || invoiceStatus == 'proof_uploaded') {
       resolvedPaymentStatus = 'proof_uploaded';
     } else if (latestProofStatus == 'approved' || invoiceStatus == 'paid') {
       resolvedPaymentStatus = 'approved';
     } else if (latestProofStatus == 'rejected') {
       resolvedPaymentStatus = 'rejected';
     } else {
-      resolvedPaymentStatus = (json['payment_status'] ?? 'unpaid')
-          .toString()
-          .toLowerCase();
+      resolvedPaymentStatus = rawPaymentStatus;
     }
 
     return ProviderServiceRequestModel(
@@ -233,6 +255,11 @@ class ProviderServiceRequestModel {
           (latestProof['rejection_reason'] ?? json['payment_rejection_reason'])
               ?.toString(),
       providerReply: json['provider_reply']?.toString(),
+      cancellationStatus: (json['cancellation_status'] ?? '').toString(),
+      cancellationReason: json['cancellation_reason']?.toString(),
+      refundPercentage: _toDouble(json['refund_percentage'] ?? 0),
+      refundedSyp: _toInt(json['refunded_syp'] ?? 0),
+      providerRetainedSyp: _toInt(json['provider_retained_syp'] ?? 0),
       providerCommissionRate: _toDouble(json['provider_commission_rate'] ?? 10),
       providerCommissionSyp: _toInt(json['provider_commission_syp'] ?? 0),
       providerNetSyp: _toInt(json['provider_net_syp'] ?? 0),
@@ -259,6 +286,11 @@ class ProviderServiceRequestModel {
     'payment_proof_url': paymentProofUrl,
     'payment_rejection_reason': paymentRejectionReason,
     'provider_reply': providerReply,
+    'cancellation_status': cancellationStatus,
+    'cancellation_reason': cancellationReason,
+    'refund_percentage': refundPercentage,
+    'refunded_syp': refundedSyp,
+    'provider_retained_syp': providerRetainedSyp,
   };
 }
 

@@ -199,6 +199,8 @@ Route::middleware(['auth:sanctum', 'account.active', 'role:provider'])->prefix('
     Route::post('/requests/{providerRequest}/reject', [ProviderServiceRequestController::class, 'reject']);
     Route::post('/requests/{providerRequest}/payment/approve', [ProviderServiceRequestController::class, 'approvePayment']);
     Route::post('/requests/{providerRequest}/payment/reject', [ProviderServiceRequestController::class, 'rejectPayment']);
+    Route::post('/requests/{providerRequest}/cancel', [ProviderServiceRequestController::class, 'cancel']);
+    Route::post('/requests/{providerRequest}/confirm-refund', [ProviderServiceRequestController::class, 'confirmRefund']);
     Route::get('/reports/summary', [ProviderReportController::class, 'summary']);
 });
 

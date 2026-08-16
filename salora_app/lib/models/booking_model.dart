@@ -85,6 +85,10 @@ class BookingModel {
   final String? receiptNumber;
   final String? verificationUrl;
   final String? rejectionReason;
+  final String cancellationStatus;
+  final String? cancellationReason;
+  final double refundAmount;
+  final double refundPercentage;
   final BookingStatus status;
   final DateTime createdAt;
 
@@ -116,6 +120,10 @@ class BookingModel {
     this.receiptNumber,
     this.verificationUrl,
     this.rejectionReason,
+    this.cancellationStatus = '',
+    this.cancellationReason,
+    this.refundAmount = 0,
+    this.refundPercentage = 0,
     this.status = BookingStatus.pending,
     required this.createdAt,
   });
@@ -223,9 +231,14 @@ class BookingModel {
       receiptNumber: invoice['receipt_number']?.toString(),
       verificationUrl: invoice['verification_url']?.toString(),
       rejectionReason: json['rejection_reason']?.toString(),
+      cancellationStatus: (json['cancellation_status'] ?? '').toString(),
+      cancellationReason: json['cancellation_reason']?.toString(),
+      refundAmount: _toDouble(json['refunded_syp'] ?? json['refund_amount_syp']),
+      refundPercentage: _toDouble(json['refund_percentage']),
       status: _statusFromApi(
         (json['booking_status'] ?? '').toString(),
         (json['payment_status'] ?? '').toString(),
+        (json['cancellation_status'] ?? '').toString(),
       ),
       createdAt:
           DateTime.tryParse(
@@ -259,6 +272,10 @@ class BookingModel {
     List<ProviderServiceRequestModel>? providerRequests,
     String? rejectionReason,
     String? receiptNumber,
+    String? cancellationStatus,
+    String? cancellationReason,
+    double? refundAmount,
+    double? refundPercentage,
   }) => BookingModel(
     id: id,
     bookingNumber: bookingNumber,
@@ -287,12 +304,26 @@ class BookingModel {
     receiptNumber: receiptNumber ?? this.receiptNumber,
     verificationUrl: verificationUrl,
     rejectionReason: rejectionReason ?? this.rejectionReason,
+    cancellationStatus: cancellationStatus ?? this.cancellationStatus,
+    cancellationReason: cancellationReason ?? this.cancellationReason,
+    refundAmount: refundAmount ?? this.refundAmount,
+    refundPercentage: refundPercentage ?? this.refundPercentage,
     status: status ?? this.status,
     createdAt: createdAt,
   );
+
+  bool get isAwaitingRefund => cancellationStatus == 'waiting_refund';
+
+  String get effectiveStatusLabel {
+    if (isAwaitingRefund) return 'بانتظار الاسترداد';
+    return status.label;
+  }
 }
 
-BookingStatus _statusFromApi(String bookingStatus, String paymentStatus) {
+BookingStatus _statusFromApi(String bookingStatus, String paymentStatus, String cancellationStatus) {
+  if (cancellationStatus.toLowerCase() == 'waiting_refund') {
+    return BookingStatus.cancelled;
+  }
   switch (bookingStatus.toLowerCase()) {
     case 'pending_owner_review':
       return BookingStatus.approved;
@@ -349,6 +380,13 @@ String _bookingTimeFromApi(dynamic dateTimeValue, dynamic timeValue) {
 
 String _shortTime(String value) =>
     value.length >= 5 ? value.substring(0, 5) : value;
+
+double _toDouble(dynamic value) {
+  if (value is num) return value.toDouble();
+  final text = value?.toString().replaceAll(',', '').trim() ?? '';
+  if (text.isEmpty) return 0;
+  return double.tryParse(text) ?? 0;
+}
 
 int _toInt(dynamic value) {
   if (value is int) return value;

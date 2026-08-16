@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Booking;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -745,6 +746,16 @@ public function workingWindows(int $venueId, Carbon $referenceDate): array
             return;
         }
 
+        $booking = Booking::query()->find($bookingId);
+        $eventStart = null;
+        if ($booking?->event_date) {
+            $startDate = $booking->event_date instanceof Carbon ? $booking->event_date->copy() : Carbon::parse($booking->event_date);
+            $startTime = $booking->start_time ? substr((string) $booking->start_time, 0, 5) : '00:00';
+            $eventStart = Carbon::parse($startDate->toDateString().' '.$startTime);
+        }
+        $hoursUntilEvent = $eventStart ? now()->diffInHours($eventStart, false) : 0;
+        $policyRefundPercent = $hoursUntilEvent > 168 ? 100.0 : ($hoursUntilEvent >= 120 ? 50.0 : 0.0);
+
         $requests = DB::table('provider_service_requests')
             ->where('booking_id', $bookingId)
             ->whereNotIn('status', ['cancelled', 'rejected', 'completed'])
@@ -754,17 +765,65 @@ public function workingWindows(int $venueId, Carbon $referenceDate): array
             return;
         }
 
-        DB::table('provider_service_requests')
-            ->whereIn('id', $requests->pluck('id'))
-            ->update([
-                'status' => 'cancelled',
-                'updated_at' => now(),
-            ]);
-
-        // Provider payments/commissions are not erased. Their existing financial
-        // records remain as audit truth and are handled by the finance layer.
-
         foreach ($requests as $providerRequest) {
+            $paid = in_array(strtolower((string) ($providerRequest->payment_status ?? '')), ['approved', 'paid', 'verified', 'payment_approved'], true);
+            $price = round((float) ($providerRequest->price_syp ?? 0), 2);
+            $refundPercent = $paid ? $policyRefundPercent : 0.0;
+            $refund = $paid ? round($price * ($refundPercent / 100), 2) : 0.0;
+            $retained = $paid ? round(max(0, $price - $refund), 2) : 0.0;
+            $cancellationStatus = $paid && $refund > 0 ? 'waiting_refund' : 'cancelled';
+            $paymentStatus = $paid
+                ? ($refund > 0 ? 'pending_refund' : 'cancelled')
+                : 'cancelled';
+
+            $updates = [
+                'status' => 'cancelled',
+                'cancelled_by' => 'booking_cancellation',
+                'cancellation_reason' => $reason,
+                'cancellation_status' => $cancellationStatus,
+                'refund_percentage' => $refundPercent,
+                'refunded_syp' => $refund,
+                'provider_retained_syp' => $retained,
+                'payment_status' => $paymentStatus,
+                'updated_at' => now(),
+            ];
+            DB::table('provider_service_requests')->where('id', $providerRequest->id)->update($this->filterColumns('provider_service_requests', $updates));
+
+            if (!empty($providerRequest->invoice_id) && Schema::hasTable('invoices')) {
+                $invoiceStatus = $paid
+                    ? ($refund > 0 ? 'refund_pending' : 'paid')
+                    : 'cancelled';
+                DB::table('invoices')->where('id', $providerRequest->invoice_id)->update([
+                    'status' => $invoiceStatus,
+                    'updated_at' => now(),
+                ]);
+            }
+
+            if ($paid && $refund > 0 && !empty($providerRequest->invoice_id) && Schema::hasTable('payment_refunds')) {
+                $exists = DB::table('payment_refunds')
+                    ->where('invoice_id', $providerRequest->invoice_id)
+                    ->where('reason', 'customer_booking_cancelled')
+                    ->exists();
+                if (!$exists) {
+                    $refundRow = [
+                        'booking_id' => $bookingId,
+                        'invoice_id' => $providerRequest->invoice_id,
+                        'customer_id' => $providerRequest->customer_id,
+                        'payee_id' => $providerRequest->provider_id,
+                        'amount_syp' => $refund,
+                        'amount_usd' => 0,
+                        'refund_percent' => $refundPercent,
+                        'status' => 'pending',
+                        'requested_by_role' => 'customer',
+                        'reason' => 'customer_booking_cancelled',
+                        'due_at' => now(),
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+                    DB::table('payment_refunds')->insert($this->filterColumns('payment_refunds', $refundRow));
+                }
+            }
+
             try {
                 $model = \App\Models\ProviderServiceRequest::query()->find($providerRequest->id);
                 if ($model) {
@@ -773,17 +832,21 @@ public function workingWindows(int $venueId, Carbon $referenceDate): array
             } catch (\Throwable $error) {
                 report($error);
             }
+
             if (empty($providerRequest->provider_id)) {
                 continue;
             }
-            $hasRecordedPayment = in_array(strtolower((string) ($providerRequest->payment_status ?? '')), ['approved', 'paid', 'verified'], true);
-            $paymentNote = $hasRecordedPayment
-                ? ' يوجد دفع مسجل لهذا الطلب؛ تم الحفاظ على السجل المالي ويجب تسويته حسب سياسة الخدمة.'
-                : '';
+
+            $note = $paid
+                ? ($refund > 0
+                    ? 'طلب الخدمة أُلغي لأن الحجز الأساسي أُلغي. نسبة الاسترداد للخدمة '.$refundPercent.'% ويجب عليك تأكيد رد المبلغ للعميل.'
+                    : 'طلب الخدمة أُلغي لأن الحجز الأساسي أُلغي. لا يوجد استرداد وفق السياسة الزمنية وتبقى السجلات المالية محفوظة.')
+                : 'طلب الخدمة أُلغي لأن الحجز الأساسي أُلغي. لم يكن الطلب مدفوعاً.';
+
             NotificationService::send(
                 (int) $providerRequest->provider_id,
                 'تم إلغاء طلب خدمة مرتبط بحجز',
-                'تم إلغاء طلب الخدمة '.($providerRequest->service_name ?? '').' لأن الحجز رقم '.$bookingId.' لم يعد فعالاً. '.$reason.$paymentNote,
+                'تم إلغاء طلب الخدمة '.($providerRequest->service_name ?? '').' لأن الحجز رقم '.$bookingId.' لم يعد فعالاً. '.$note,
                 'provider_service_cancelled',
                 [
                     'event' => 'provider_service_cancelled',
@@ -792,6 +855,28 @@ public function workingWindows(int $venueId, Carbon $referenceDate): array
                     'target_route' => 'provider_requests',
                 ],
             );
+
+            if (!empty($providerRequest->customer_id)) {
+                $customerMessage = $paid
+                    ? ($refund > 0
+                        ? 'تم إلغاء خدمة '.($providerRequest->service_name ?? '').' مع استرداد '.$refundPercent.'% بقيمة '.number_format($refund).' ل.س، وبانتظار تأكيد مقدم الخدمة لرد المبلغ.'
+                        : 'تم إلغاء خدمة '.($providerRequest->service_name ?? '').' ولا يوجد استرداد حسب الوقت المتبقي للمناسبة.')
+                    : 'تم إلغاء خدمة '.($providerRequest->service_name ?? '').' ولم تكن مدفوعة.';
+                NotificationService::send(
+                    (int) $providerRequest->customer_id,
+                    'تم تحديث خدمة مرتبطة بالحجز الملغي',
+                    $customerMessage,
+                    'provider_service_cancellation_refund',
+                    [
+                        'event' => 'provider_service_cancellation_refund',
+                        'booking_id' => (string) $bookingId,
+                        'request_id' => (string) $providerRequest->id,
+                        'refund_percentage' => (string) $refundPercent,
+                        'refund_syp' => (string) $refund,
+                        'target_route' => 'booking_details',
+                    ],
+                );
+            }
         }
     }
 

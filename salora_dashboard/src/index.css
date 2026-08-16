@@ -343,3 +343,72 @@ table { text-align: right; }
 .lg\:left-0 { left: auto !important; right: 0 !important; }
 .border-r { border-right-width: 0 !important; border-left-width: 1px !important; }
 @media (max-width: 1023px) { .lg\:pl-72 { padding-right: 0 !important; } }
+
+.theme-light body,
+.theme-light #root {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.theme-light [class*='bg-slate-95'],
+.theme-light [class*='bg-slate-9'],
+.theme-light [class*='bg-slate-8'] {
+  background-color: rgba(255, 255, 255, 0.92) !important;
+}
+
+.theme-light [class*='text-slate-1'],
+.theme-light [class*='text-slate-2'],
+.theme-light [class*='text-slate-3'],
+.theme-light [class*='text-slate-4'],
+.theme-light [class*='text-slate-5'] {
+  color: #0f172a !important;
+}
+
+.theme-light [class*='border-slate-7'],
+.theme-light [class*='border-slate-8'],
+.theme-light [class*='border-slate-9'] {
+  border-color: #cbd5e1 !important;
+}
+
+/* Complete persisted light-mode surface corrections */
+.theme-light #root > div {
+  background: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+.theme-light body::before {
+  opacity: .35;
+}
+
+.theme-light .glass-panel,
+.theme-light .salora-section-card {
+  background: rgba(255, 255, 255, .92) !important;
+  border-color: rgba(148, 163, 184, .28) !important;
+  box-shadow: 0 12px 35px rgba(15, 23, 42, .10) !important;
+}
+
+.theme-light input:not([type="checkbox"]):not([type="radio"]),
+.theme-light select,
+.theme-light textarea,
+.theme-light .field-surface {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+  color-scheme: light;
+}
+
+.theme-light input::placeholder,
+.theme-light textarea::placeholder {
+  color: #64748b !important;
+}
+
+.theme-light select option,
+.theme-light select optgroup {
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+.theme-light input[type="date"],
+.theme-light input[type="time"] {
+  color-scheme: light;
+}

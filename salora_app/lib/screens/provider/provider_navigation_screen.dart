@@ -6,6 +6,7 @@ import '../../core/widgets/user_avatar.dart';
 import '../../models/user_role.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/provider_account_provider.dart';
+import '../../providers/theme_provider.dart';
 import '../auth/login_screen.dart';
 import '../profile/edit_profile_screen.dart';
 import 'provider_business_profile_screen.dart';
@@ -245,6 +246,21 @@ class _ProviderProfileScreen extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(20)),
+              child: Consumer<ThemeProvider>(
+                builder: (context, theme, _) => SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  value: theme.isDark,
+                  onChanged: (_) => theme.toggleTheme(),
+                  secondary: Icon(theme.isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined),
+                  title: const Text("الوضع الليلي / النهاري"),
+                  subtitle: Text(theme.isDark ? "الوضع الحالي: ليلي" : "الوضع الحالي: نهاري"),
+                ),
               ),
             ),
             const SizedBox(height: 12),

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 
@@ -47,6 +47,12 @@ export default function Layout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [themeMode, setThemeMode] = useState(() => localStorage.getItem("salora-dashboard-theme") || "dark");
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("theme-light", themeMode === "light");
+    localStorage.setItem("salora-dashboard-theme", themeMode);
+  }, [themeMode]);
 
   if (!context) return <div className="min-h-screen grid place-items-center bg-[#020617] text-white">جاري تحميل لوحة Salora...</div>;
 
@@ -107,6 +113,14 @@ export default function Layout({ children }) {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setThemeMode((value) => (value === "dark" ? "light" : "dark"))}
+              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-bold hover:bg-white/10"
+              title="تبديل الوضع الليلي والنهاري"
+            >
+              {themeMode === "dark" ? "☀️ نهاري" : "🌙 ليلي"}
+            </button>
             <button onClick={() => navigate(isOwner ? "/owner/notifications" : "/admin/notifications")} className="relative rounded-xl border border-white/10 bg-white/5 px-3 py-2 hover:bg-white/10">
               🔔 {unreadCount > 0 && <span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-red-500 text-[10px] font-bold">{unreadCount}</span>}
             </button>

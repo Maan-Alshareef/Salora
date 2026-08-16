@@ -166,16 +166,21 @@ class PlatformCommissionService
             ->first();
 
         if (in_array((string) $request->status, self::CANCELLED_PROVIDER_STATUSES, true)) {
-            $this->cancelIfUncollected($existing);
-            return $existing?->fresh();
-        }
-
-        if (! in_array((string) $request->status, self::ACTIVE_PROVIDER_STATUSES, true)) {
+            $retained = (float) ($request->provider_retained_syp ?? 0);
+            if ($retained <= 0) {
+                $this->cancelIfUncollected($existing);
+                return $existing?->fresh();
+            }
+        } elseif (! in_array((string) $request->status, self::ACTIVE_PROVIDER_STATUSES, true)) {
             return $existing;
         }
 
-        $grossSyp = (float) $request->price_syp;
+        $isCancellationFinancial = in_array((string) $request->status, self::CANCELLED_PROVIDER_STATUSES, true) && (float) ($request->provider_retained_syp ?? 0) > 0;
+        $grossSyp = $isCancellationFinancial ? (float) $request->provider_retained_syp : (float) $request->price_syp;
         $grossUsd = (float) $request->price_usd;
+        if ($isCancellationFinancial && (float) $request->price_syp > 0) {
+            $grossUsd = round((float) $request->price_usd * ($grossSyp / (float) $request->price_syp), 2);
+        }
 
         return $this->upsert(
             'provider_service_request',

@@ -10,11 +10,15 @@ import '../../salora_v2/salora_booking_v2_api.dart';
 import '../../models/booking_model.dart';
 import '../../providers/app_settings_provider.dart';
 import '../../providers/booking_provider.dart';
+import '../../providers/event_provider.dart';
+import '../../models/event_model.dart';
 import 'invoice_document_screen.dart';
 import 'payment_proof_screen.dart';
 import 'payment_receipt_screen.dart';
 import 'provider_service_payment_screen.dart';
 import '../services/services_screen.dart';
+import '../events/event_todo_screen.dart';
+import '../invitations/invitation_screen.dart';
 
 class BookingDetailsScreen extends StatelessWidget {
   final BookingModel booking;
@@ -139,7 +143,11 @@ class BookingDetailsScreen extends StatelessWidget {
                   style: const TextStyle(color: AppColors.textSecondary),
                 ),
                 const Divider(height: 28),
-                _row('الحالة', fresh.status.label),
+                _row('الحالة', fresh.effectiveStatusLabel),
+                if (fresh.isAwaitingRefund) ...[
+                  _row('الاسترداد', fresh.refundAmount > 0 ? '${settings.formatPrice(fresh.refundAmount)} (${fresh.refundPercentage.toStringAsFixed(0)}%)' : 'بانتظار تنفيذ الاسترداد'),
+                  if ((fresh.cancellationReason ?? '').isNotEmpty) _row('سبب الإلغاء', fresh.cancellationReason!),
+                ],
                 _row('المدينة', fresh.city),
                 _row(
                   'تاريخ المناسبة',
@@ -156,6 +164,8 @@ class BookingDetailsScreen extends StatelessWidget {
               ],
             ),
           ),
+          const SizedBox(height: 18),
+          _eventHub(context, fresh),
           if (fresh.receiptPath != null) ...[
             const SizedBox(height: 16),
             const Text(
@@ -432,6 +442,187 @@ class BookingDetailsScreen extends StatelessWidget {
               label: const Text('عرض وحفظ إيصال الدفع'),
             ),
         ],
+      ),
+    );
+  }
+
+  EventModel _eventForBooking(BuildContext context, BookingModel booking) {
+    final events = context.read<EventProvider>().events;
+    for (final event in events) {
+      if ((booking.eventId != null && booking.eventId!.isNotEmpty && event.id == booking.eventId) ||
+          event.bookingId == booking.id) {
+        return event;
+      }
+    }
+
+    return EventModel(
+      id: booking.eventId?.isNotEmpty == true ? booking.eventId! : 'booking-${booking.id}',
+      title: booking.eventTitle,
+      type: eventTypeFromLabel(booking.eventType),
+      date: booking.eventDate,
+      city: booking.city,
+      guests: booking.guests,
+      budget: booking.totalAmount,
+      totalAmount: booking.totalAmount,
+      venueId: booking.venueId,
+      venueName: booking.venueName,
+      startTime: booking.startTime,
+      endTime: booking.endTime,
+      bookingId: booking.id,
+      neededServices: const [],
+      tasks: const [],
+      createdAt: booking.eventDate,
+    );
+  }
+
+  Widget _eventHub(BuildContext context, BookingModel booking) {
+    final event = _eventForBooking(context, booking);
+    final settings = context.watch<AppSettingsProvider>();
+    final canAccessEventTools = booking.status == BookingStatus.paid ||
+        booking.status == BookingStatus.completed;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'تفاصيل المناسبة',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 8),
+          _row('العنوان', event.title, bold: true),
+          _row('الصالة', booking.venueName),
+          _row('الموقع', booking.city),
+          _row('الوقت', '${booking.startTime} - ${booking.endTime}'),
+          _row('إجمالي الحجز', settings.formatPrice(booking.totalAmount), bold: true),
+          const SizedBox(height: 12),
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            childAspectRatio: 1.12,
+            children: [
+              _eventActionCard(
+                icon: Icons.room_service_rounded,
+                title: 'الخدمات',
+                subtitle: 'إضافة مقدمي خدمات',
+                onTap: canAccessEventTools
+                    ? () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ServicesScreen(
+                              event: event,
+                              preferredBookingId: booking.id,
+                              preferredEventType: booking.eventType,
+                            ),
+                          ),
+                        )
+                    : null,
+              ),
+              _eventActionCard(
+                icon: Icons.receipt_long_outlined,
+                title: 'الفاتورة',
+                subtitle: 'الإجمالي والدفع',
+                onTap: (booking.status == BookingStatus.paid || booking.status == BookingStatus.completed) && booking.invoiceId != null
+                    ? () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => PaymentReceiptScreen(booking: booking)),
+                        )
+                    : booking.invoiceId != null
+                        ? () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => InvoiceDocumentScreen(
+                                  invoiceId: booking.invoiceId!,
+                                  sourceTitle: booking.venueName,
+                                  sourceSubtitle:
+                                      '${booking.eventDate.year}-${booking.eventDate.month}-${booking.eventDate.day} • ${booking.startTime} - ${booking.endTime}',
+                                ),
+                              ),
+                            )
+                        : null,
+              ),
+              _eventActionCard(
+                icon: Icons.card_giftcard_rounded,
+                title: 'الدعوة',
+                subtitle: 'إنشاء ومشاركة',
+                onTap: canAccessEventTools
+                    ? () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => InvitationScreen(event: event)),
+                        )
+                    : null,
+              ),
+              _eventActionCard(
+                icon: Icons.checklist_rounded,
+                title: 'قائمة المهام',
+                subtitle: 'إدارة المهام',
+                onTap: canAccessEventTools
+                    ? () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => EventTodoScreen(event: event)),
+                        )
+                    : null,
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            booking.providerRequests.isEmpty
+                ? 'الخدمات المدفوعة المختارة\nلا توجد خدمات مدفوعة مختارة.'
+                : 'الخدمات المدفوعة المختارة\nتم اختيار ${booking.providerRequests.length} خدمة مرتبطة بهذه المناسبة.',
+            style: const TextStyle(color: AppColors.textSecondary, height: 1.5),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _eventActionCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback? onTap,
+  }) {
+    final enabled = onTap != null;
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface2,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.textSecondary.withOpacity(0.18)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: enabled ? AppColors.primary : AppColors.textSecondary),
+            ),
+            const Spacer(),
+            Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+            const SizedBox(height: 4),
+            Text(
+              enabled ? subtitle : 'يتاح بعد تأكيد الحجز',
+              style: const TextStyle(color: AppColors.textSecondary),
+            ),
+          ],
+        ),
       ),
     );
   }

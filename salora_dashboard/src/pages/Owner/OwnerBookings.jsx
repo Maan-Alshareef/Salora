@@ -105,6 +105,29 @@ export default function OwnerBookings() {
     }
   }
 
+  async function cancelBooking(booking) {
+    const reason = window.prompt(`اكتب سبب إلغاء مالك الصالة للحجز.
+سيحصل العميل على استرداد 100% إذا كان الحجز مدفوعاً.`, booking.cancellationReason || '');
+    if (!reason || !reason.trim()) return;
+
+    setBusyBookingId(String(booking.id));
+    setMessage('');
+    setError('');
+    try {
+      await saloraV2(`/owner/bookings/${booking.id}/cancel`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      setMessage(`تم إلغاء الحجز #${booking.id} وتسجيل حق العميل بالاسترداد الكامل.`);
+      refreshData();
+      await loadChangeRequests();
+    } catch (requestError) {
+      setError(requestError.message || 'تعذر إلغاء الحجز من جهة مالك الصالة.');
+    } finally {
+      setBusyBookingId('');
+    }
+  }
+
   async function confirmAdjustmentRefund(booking, adjustment) {
     const amount = Number(adjustment?.amount_syp || 0).toLocaleString("en-US");
     const approved = window.confirm(`هل تؤكد أنك أعدت فرق السعر ${amount} ل.س للعميل؟`);
@@ -306,7 +329,19 @@ export default function OwnerBookings() {
                             {busyBookingId === String(booking.id) ? "جاري التأكيد..." : "تأكيد تنفيذ الاسترداد"}
                           </button>
                         </div>
-                      ) : bookingTone === "confirmed" ? <span className="text-emerald-300">لا يوجد إجراء — الحجز مؤكد</span> : bookingTone === "cancelled" ? <span className="text-red-300">لا يوجد إجراء</span> : booking.paymentProofId ? <span className="text-amber-300">راجع الإثبات من صفحة الدفعات</span> : <span className="text-amber-300">بانتظار دفع العميل</span>}
+                      ) : bookingTone === "confirmed" ? (
+                        <div className="space-y-2">
+                          <div className="text-emerald-300">الحجز مؤكد</div>
+                          <button
+                            type="button"
+                            disabled={busyBookingId === String(booking.id)}
+                            onClick={() => cancelBooking(booking)}
+                            className="rounded-xl bg-rose-500/20 px-3 py-2 text-rose-200 disabled:opacity-60"
+                          >
+                            {busyBookingId === String(booking.id) ? "جاري الإلغاء..." : "إلغاء من جهة الصالة"}
+                          </button>
+                        </div>
+                      ) : bookingTone === "cancelled" ? <span className="text-red-300">لا يوجد إجراء</span> : booking.paymentProofId ? <span className="text-amber-300">راجع الإثبات من صفحة الدفعات</span> : <span className="text-amber-300">بانتظار دفع العميل</span>}
                     </td>
                   </tr>
                 );

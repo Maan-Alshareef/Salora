@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../providers/app_settings_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/booking_model.dart';
@@ -17,19 +18,12 @@ class MyBookingsScreen extends StatefulWidget {
 class _MyBookingsScreenState extends State<MyBookingsScreen> {
   String filter = 'الكل';
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<BookingProvider>().loadMyBookings();
-    });
-  }
-
-  final filters = [
+  final filters = const [
     'الكل',
     'بانتظار الدفع',
     'بانتظار مراجعة الدفع',
     'مؤكد',
+    'بانتظار الاسترداد',
     'طلب تعديل قيد المراجعة',
     'طلب إلغاء قيد المراجعة',
     'مرفوض',
@@ -38,12 +32,22 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<BookingProvider>().loadMyBookings();
+    });
+  }
+
+  bool _matchesFilter(BookingModel booking) {
+    if (filter == 'الكل') return true;
+    return booking.effectiveStatusLabel == filter;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final bookings = context
-        .watch<BookingProvider>()
-        .bookings
-        .where((b) => filter == 'الكل' || b.status.label == filter)
-        .toList();
+    final bookings = context.watch<BookingProvider>().bookings.where(_matchesFilter).toList();
+
     return Scaffold(
       appBar: AppBar(title: const Text('حجوزاتي')),
       body: Column(
@@ -72,8 +76,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                 : ListView.builder(
                     padding: const EdgeInsets.all(16),
                     itemCount: bookings.length,
-                    itemBuilder: (context, index) =>
-                        _BookingCard(booking: bookings[index]),
+                    itemBuilder: (context, index) => _BookingCard(booking: bookings[index]),
                   ),
           ),
         ],
@@ -83,8 +86,9 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
 }
 
 class _BookingCard extends StatelessWidget {
-  final BookingModel booking;
   const _BookingCard({required this.booking});
+
+  final BookingModel booking;
 
   @override
   Widget build(BuildContext context) {
@@ -103,13 +107,10 @@ class _BookingCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   booking.venueName,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                  ),
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
                 ),
               ),
-              _status(booking.status),
+              _status(booking),
             ],
           ),
           const SizedBox(height: 8),
@@ -119,21 +120,23 @@ class _BookingCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            context.watch<AppSettingsProvider>().formatPrice(
-              booking.totalAmount,
-            ),
-            style: const TextStyle(
-              color: AppColors.success,
-              fontWeight: FontWeight.bold,
-            ),
+            context.watch<AppSettingsProvider>().formatPrice(booking.totalAmount),
+            style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.bold),
           ),
+          if (booking.isAwaitingRefund) ...[
+            const SizedBox(height: 8),
+            Text(
+              booking.refundAmount > 0
+                  ? 'الاسترداد المتوقع: ${context.watch<AppSettingsProvider>().formatPrice(booking.refundAmount)}'
+                  : 'تم إلغاء الحجز وهو بانتظار تأكيد الاسترداد من المالك.',
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
+          ],
           const SizedBox(height: 12),
           OutlinedButton(
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (_) => BookingDetailsScreen(booking: booking),
-              ),
+              MaterialPageRoute(builder: (_) => BookingDetailsScreen(booking: booking)),
             ),
             child: const Text('عرض التفاصيل'),
           ),
@@ -142,7 +145,8 @@ class _BookingCard extends StatelessWidget {
     );
   }
 
-  Widget _status(BookingStatus status) {
+  Widget _status(BookingModel booking) {
+    final status = booking.status;
     Color color;
     switch (status) {
       case BookingStatus.pending:
@@ -167,7 +171,7 @@ class _BookingCard extends StatelessWidget {
         color = AppColors.danger;
         break;
       case BookingStatus.cancelled:
-        color = AppColors.danger;
+        color = booking.isAwaitingRefund ? AppColors.warning : AppColors.danger;
         break;
       case BookingStatus.completed:
         color = AppColors.textSecondary;
@@ -180,7 +184,7 @@ class _BookingCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
-        status.label,
+        booking.effectiveStatusLabel,
         style: TextStyle(
           color: color,
           fontWeight: FontWeight.w800,

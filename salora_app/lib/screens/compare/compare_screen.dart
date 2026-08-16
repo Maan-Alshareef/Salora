@@ -1,148 +1,273 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/theme/app_colors.dart';
-import '../../core/widgets/price_text.dart';
 import '../../models/venue_model.dart';
+import '../../providers/app_settings_provider.dart';
 import '../../providers/compare_provider.dart';
-import '../../widgets/empty_state.dart';
 
 class CompareScreen extends StatelessWidget {
   const CompareScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final items = context.watch<CompareProvider>().items;
+    final compare = context.watch<CompareProvider>();
+    final settings = context.watch<AppSettingsProvider>();
+    final venues = compare.items;
+    final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('مقارنة الصالات'),
         actions: [
-          if (items.isNotEmpty)
-            TextButton(
+          if (venues.isNotEmpty)
+            TextButton.icon(
               onPressed: () => context.read<CompareProvider>().clear(),
-              child: const Text('مسح'),
+              icon: const Icon(Icons.delete_sweep_outlined),
+              label: const Text('مسح'),
             ),
         ],
       ),
-      body: items.length < 2
-          ? const EmptyState(
-              icon: Icons.compare_arrows_rounded,
-              title: 'اختر صالتين أو ثلاثاً',
-              subtitle: 'يمكن حفظ ثلاث صالات كحد أقصى، وتبقى المقارنة محفوظة بعد إغلاق التطبيق.',
+      body: venues.length < 2
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.compare_arrows_rounded,
+                      size: 54,
+                      color: theme.colorScheme.primary,
+                    ),
+                    const SizedBox(height: 14),
+                    const Text(
+                      'أضف صالتين على الأقل إلى المقارنة',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'ستظهر كل صالة بكرت مستقل تحت الثانية حتى تكون المواصفات واضحة بدون قص أو ازدحام.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: theme.colorScheme.onSurfaceVariant, height: 1.45),
+                    ),
+                  ],
+                ),
+              ),
             )
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: SizedBox(
-                  width: 150 + (items.length * 190),
-                  child: Column(
+          : ListView.separated(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+              itemCount: venues.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 18),
+              itemBuilder: (context, index) {
+                final venue = venues[index];
+                return _VenueCompareCard(
+                  index: index + 1,
+                  venue: venue,
+                  priceText: settings.formatPrice(venue.price),
+                  onRemove: () => context.read<CompareProvider>().remove(venue.id),
+                );
+              },
+            ),
+    );
+  }
+}
+
+class _VenueCompareCard extends StatelessWidget {
+  const _VenueCompareCard({
+    required this.index,
+    required this.venue,
+    required this.priceText,
+    required this.onRemove,
+  });
+
+  final int index;
+  final VenueModel venue;
+  final String priceText;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final services = venue.amenities.isNotEmpty ? venue.amenities : venue.services;
+
+    return Material(
+      color: colors.surface,
+      borderRadius: BorderRadius.circular(26),
+      clipBehavior: Clip.antiAlias,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: colors.outlineVariant.withOpacity(.55)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Stack(
+              children: [
+                AspectRatio(
+                  aspectRatio: 16 / 8.4,
+                  child: venue.images.isNotEmpty
+                      ? Image.network(
+                          venue.images.first,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _imageFallback(context),
+                        )
+                      : _imageFallback(context),
+                ),
+                PositionedDirectional(
+                  top: 12,
+                  start: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(.62),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      'الصالة $index',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.all(17),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(width: 150),
-                          ...items.map((venue) => SizedBox(width: 190, child: _HallHeader(venue: venue))),
-                        ],
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              venue.name,
+                              style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w900),
+                            ),
+                            const SizedBox(height: 5),
+                            Row(
+                              children: [
+                                Icon(Icons.location_on_outlined, size: 18, color: colors.primary),
+                                const SizedBox(width: 5),
+                                Expanded(
+                                  child: Text(
+                                    venue.city,
+                                    style: TextStyle(color: colors.onSurfaceVariant, fontWeight: FontWeight.w700),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 14),
-                      _CompareRow(title: 'المدينة', values: items.map((v) => Text(v.city, textAlign: TextAlign.center)).toList()),
-                      _CompareRow(
-                        title: 'السعر',
-                        values: items
-                            .map((v) => PriceText(
-                                  priceSyp: v.finalPrice,
-                                  style: const TextStyle(fontWeight: FontWeight.w900),
-                                ))
-                            .toList(),
-                      ),
-                      _CompareRow(title: 'السعة', values: items.map((v) => Text('${v.capacity} ضيف', textAlign: TextAlign.center)).toList()),
-                      _CompareRow(title: 'التقييم', values: items.map((v) => Text('${v.rating} ⭐', textAlign: TextAlign.center)).toList()),
-                      _CompareRow(title: 'العنوان', values: items.map((v) => Text(v.address, textAlign: TextAlign.center)).toList()),
-                      _CompareRow(title: 'الخدمات', values: items.map((v) => Text(v.services.join(', '), textAlign: TextAlign.center)).toList()),
-                      _CompareRow(title: 'المزايا', values: items.map((v) => Text(v.amenities.join(', '), textAlign: TextAlign.center)).toList()),
-                      _CompareRow(
-                        title: 'العرض',
-                        values: items
-                            .map((v) => Text(v.hasOffer ? '${v.discountPercentage}% خصم' : 'لا يوجد عرض', textAlign: TextAlign.center))
-                            .toList(),
+                      IconButton.filledTonal(
+                        onPressed: onRemove,
+                        tooltip: 'إزالة من المقارنة',
+                        icon: const Icon(Icons.close_rounded),
                       ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 16),
+                  _InfoTile(
+                    icon: Icons.payments_outlined,
+                    title: 'السعر',
+                    value: priceText,
+                    emphasize: true,
+                  ),
+                  _InfoTile(
+                    icon: Icons.groups_2_outlined,
+                    title: 'السعة',
+                    value: '${venue.capacity} ضيف',
+                  ),
+                  _InfoTile(
+                    icon: Icons.star_rounded,
+                    title: 'التقييم',
+                    value: '⭐ ${venue.rating.toStringAsFixed(1)} (${venue.reviewsCount} تقييم)',
+                  ),
+                  _InfoTile(
+                    icon: Icons.celebration_outlined,
+                    title: 'المناسبات',
+                    value: venue.eventTypes.isEmpty ? 'غير محدد' : venue.eventTypes.join('، '),
+                  ),
+                  _InfoTile(
+                    icon: Icons.room_service_outlined,
+                    title: 'الخدمات والمزايا',
+                    value: services.isEmpty ? 'لا توجد بيانات' : services.join('، '),
+                    last: true,
+                  ),
+                ],
               ),
             ),
-    );
-  }
-}
-
-class _HallHeader extends StatelessWidget {
-  const _HallHeader({required this.venue});
-  final VenueModel venue;
-
-  @override
-  Widget build(BuildContext context) {
-    final image = venue.image;
-    final imageWidget = image.startsWith('http')
-        ? Image.network(image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _fallback())
-        : Image.asset(image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _fallback());
-    return Container(
-      margin: const EdgeInsetsDirectional.only(start: 10),
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        AspectRatio(aspectRatio: 1.45, child: imageWidget),
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(venue.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900)),
-            const SizedBox(height: 6),
-            TextButton.icon(
-              onPressed: () => context.read<CompareProvider>().remove(venue.id),
-              icon: const Icon(Icons.close, size: 17),
-              label: const Text('إزالة'),
-            ),
-          ]),
+          ],
         ),
-      ]),
+      ),
     );
   }
 
-  Widget _fallback() => Container(
-        color: AppColors.surface2,
-        child: const Center(child: Icon(Icons.location_city_rounded, size: 44)),
+  Widget _imageFallback(BuildContext context) => Container(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        alignment: Alignment.center,
+        child: Icon(
+          Icons.image_not_supported_outlined,
+          size: 44,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
       );
 }
 
-class _CompareRow extends StatelessWidget {
-  const _CompareRow({required this.title, required this.values});
+class _InfoTile extends StatelessWidget {
+  const _InfoTile({
+    required this.icon,
+    required this.title,
+    required this.value,
+    this.emphasize = false,
+    this.last = false,
+  });
+
+  final IconData icon;
   final String title;
-  final List<Widget> values;
+  final String value;
+  final bool emphasize;
+  final bool last;
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(18)),
+      width: double.infinity,
+      margin: EdgeInsets.only(bottom: last ? 0 : 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHighest.withOpacity(.42),
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Icon(icon, size: 20, color: colors.primary),
+          const SizedBox(width: 10),
           SizedBox(
-            width: 150,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: Text(title, style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900)),
+            width: 92,
+            child: Text(
+              title,
+              style: TextStyle(color: colors.onSurfaceVariant, fontWeight: FontWeight.w700),
             ),
           ),
-          ...values.map(
-            (value) => SizedBox(
-              width: 190,
-              child: Padding(padding: const EdgeInsets.symmetric(horizontal: 10), child: value),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: emphasize ? 18 : 15,
+                fontWeight: FontWeight.w900,
+                color: emphasize ? colors.primary : colors.onSurface,
+                height: 1.45,
+              ),
             ),
           ),
         ],

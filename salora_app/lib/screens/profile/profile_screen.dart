@@ -5,6 +5,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../models/user_role.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/theme_provider.dart';
 import '../auth/login_screen.dart';
 import '../booking/my_payments_screen.dart';
 import '../owner_join/owner_join_screen.dart';
@@ -62,6 +63,19 @@ class ProfileScreen extends StatelessWidget {
           _tile(context, Icons.payments_outlined, 'مدفوعاتي', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyPaymentsScreen()))),
           _tile(context, Icons.support_agent_outlined, 'الدعم والشكاوى', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportCenterScreen()))),
           _tile(context, Icons.privacy_tip_outlined, 'سياسة الخصوصية', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()))),
+          const SizedBox(height: 12),
+          Consumer<ThemeProvider>(
+            builder: (context, theme, _) => Container(
+              decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(18)),
+              child: SwitchListTile.adaptive(
+                value: theme.isDark,
+                onChanged: (_) => context.read<ThemeProvider>().toggleTheme(),
+                secondary: Icon(theme.isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined),
+                title: const Text('الوضع الليلي / النهاري'),
+                subtitle: Text(theme.isDark ? 'الوضع الحالي: ليلي' : 'الوضع الحالي: نهاري'),
+              ),
+            ),
+          ),
           const SizedBox(height: 12),
           ListTile(
             leading: const Icon(Icons.logout_rounded, color: AppColors.danger),

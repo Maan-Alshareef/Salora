@@ -19,8 +19,8 @@ class SettingsScreen extends StatelessWidget {
           SwitchListTile(
             title: const Text('الوضع الداكن'),
             subtitle: const Text('تغيير مظهر التطبيق'),
-            value: theme.isDarkMode,
-            onChanged: context.read<ThemeProvider>().toggleTheme,
+            value: theme.isDark,
+            onChanged: (_) => context.read<ThemeProvider>().toggleTheme(),
           ),
           const ListTile(
             leading: Icon(Icons.language),

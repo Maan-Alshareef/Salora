@@ -274,6 +274,17 @@ class ProviderAccountProvider extends ChangeNotifier {
     _replaceRequest(ProviderServiceRequestModel.fromJson(Map<String, dynamic>.from(data as Map)));
   }
 
+  Future<void> cancelRequest(String id, {required String reason}) async {
+    if (reason.trim().isEmpty) throw const ApiException('سبب الإلغاء مطلوب.');
+    final data = await _api.post('/provider/requests/$id/cancel', {'reason': reason.trim()});
+    _replaceRequest(ProviderServiceRequestModel.fromJson(Map<String, dynamic>.from(data as Map)));
+  }
+
+  Future<void> confirmRefund(String id) async {
+    final data = await _api.post('/provider/requests/$id/confirm-refund', {});
+    _replaceRequest(ProviderServiceRequestModel.fromJson(Map<String, dynamic>.from(data as Map)));
+  }
+
   void _replaceRequest(ProviderServiceRequestModel request) {
     final index = _requests.indexWhere((item) => item.id == request.id);
     if (index == -1) {

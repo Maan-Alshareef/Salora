@@ -21,12 +21,16 @@ class AuthController extends BaseApiController
 
     public function login(Request $request)
     {
-        $data=$request->validate(['email'=>'required|email','password'=>'required|string']);$email=mb_strtolower(trim($data['email']));$user=User::where('email',$email)->first();
+        $data=$request->validate(['email'=>'required|email','password'=>'required|string','client_type'=>'sometimes|string|in:mobile,dashboard,web','expected_role'=>'sometimes|string|max:40']);$email=mb_strtolower(trim($data['email']));$user=User::where('email',$email)->first();
         if($user?->locked_until?->isPast()){$user->forceFill(['failed_login_attempts'=>0,'locked_until'=>null])->save();$user->refresh();}
         if($user?->locked_until?->isFuture())return $this->fail('تم قفل تسجيل الدخول مؤقتاً بسبب المحاولات المتكررة.',429,['code'=>'account_locked','retry_after_seconds'=>max(1,now()->diffInSeconds($user->locked_until,false)),'locked_until'=>$user->locked_until->toIso8601String()]);
         if(!$user||!Hash::check($data['password'],$user->password)){
             if($user){$attempts=min(5,(int)$user->failed_login_attempts+1);$locked=$attempts>=5?now()->addMinutes(10):null;$user->forceFill(['failed_login_attempts'=>$attempts,'locked_until'=>$locked])->save();if($locked)return $this->fail('تم قفل تسجيل الدخول لمدة 10 دقائق.',429,['code'=>'account_locked','retry_after_seconds'=>600,'locked_until'=>$locked->toIso8601String()]);}
             return $this->fail('البريد الإلكتروني أو كلمة المرور غير صحيحة.',422,['code'=>'invalid_credentials']);
+        }
+        $clientType = strtolower((string) ($data['client_type'] ?? ''));
+        if ($clientType === 'mobile' && in_array((string) $user->role, ['admin', 'owner'], true)) {
+            return $this->fail('هذا الحساب غير مسموح له بالدخول إلى تطبيق الموبايل.',403,['code'=>'mobile_role_not_allowed','role'=>$user->role]);
         }
         $user->reactivateIfSuspensionExpired();$user->refresh();
         if($user->status!=='active')return $this->fail($user->status==='suspended'?'الحساب مجمّد مؤقتاً.':'الحساب غير نشط.',403,['code'=>$user->status==='suspended'?'account_suspended':'account_inactive','suspended_until'=>$user->suspended_until?->toIso8601String(),'reason'=>$user->suspension_reason]);
